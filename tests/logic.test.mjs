@@ -64,7 +64,10 @@ test('trees only grow on forest rows and yard things only sit on lawns, never wh
       assert.ok(r.blocked.size < L.COLS, `row ${i}`);
     }
   });
-  for (const s of route.sections) assert.ok(!L.isBlocked(route, s.startRow, 4));
+  for (const s of route.sections) {
+    assert.ok(!L.isBlocked(route, s.startRow, 4));
+    assert.ok(!L.isBlocked(route, s.startRow + 1, 4), `${s.name}: the first step forward is open`);
+  }
 });
 
 test('hazard rows always leave a gap Grandma can fit through', () => {

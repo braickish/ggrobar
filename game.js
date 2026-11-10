@@ -1,7 +1,7 @@
-import { SECTIONS } from './stages.js?v=202611102144';
-import * as L from './logic.js?v=202611102144';
-import * as Art from './art.js?v=202611102144';
-import { Sound } from './sound.js?v=202611102144';
+import { SECTIONS } from './stages.js?v=202611102150';
+import * as L from './logic.js?v=202611102150';
+import * as Art from './art.js?v=202611102150';
+import { Sound } from './sound.js?v=202611102150';
 
 const T = Art.TILE;
 const W = L.COLS * T;                           // 540
@@ -252,7 +252,7 @@ function hop(dir, stumble = false) {
   if (dir === 'right') x += 1;
   if (!stumble) gran.facing = dir;
   // She can step back a little, but not off the bottom of the screen.
-  if (row < cam + 0.2 || row === fromRow && dir !== 'left' && dir !== 'right') { bump(); return false; }
+  if ((row < fromRow && row < cam - 0.05) || (row === fromRow && dir !== 'left' && dir !== 'right')) { bump(); return false; }
   const toPond = route.rows[row].type === 'pond';
   // Eggnog makes her wander a little on forward/back steps (but never into a tree).
   if (!stumble && tipsy > 0 && (dir === 'up' || dir === 'down') && Math.random() < L.nogDrift(nog)) {

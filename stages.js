@@ -38,7 +38,7 @@ export const SECTIONS = [
     santaEvery: 9,
     presentsEvery: 2.8,
     rows: [
-      { type: 'lawn', deco: 'S...B..T.' },
+      { type: 'lawn', deco: 'S.B....T.' },
       { type: 'sidewalk', dir: 1, speed: 2.4, kind: 'ebike', count: 3 },
       { type: 'sidewalk', dir: -1, speed: 0.8, kind: 'carolers', count: 3, stops: [2.6, 1.8] },
       { type: 'lawn', deco: '.B..S..B.' },
@@ -63,7 +63,7 @@ export const SECTIONS = [
     santaEvery: 7,
     // The hill slopes down to the right, so every sled goes that way.
     rows: [
-      { type: 'forest', trees: 'TT..T..TT' },
+      { type: 'forest', trees: 'TT.T...TT' },
       { type: 'hill', dir: 1, speed: 2.4, kind: 'sled', count: 3 },
       { type: 'hill', dir: 1, speed: 3.0, kind: 'sled', count: 2 },
       { type: 'forest', trees: 'T.T..TT.T' },
@@ -109,7 +109,7 @@ export const SECTIONS = [
     speed: 1.15,
     santaEvery: 5.5,
     rows: [
-      { type: 'forest', trees: 'T..TT.TT.' },
+      { type: 'forest', trees: 'T.TT..TT.' },
       { type: 'trail', dir: 1, speed: 4.0, kind: 'deer', count: 2, stops: [0.8, 2.0] },
       { type: 'forest', trees: '.T.T..T.T' },
       { type: 'trail', dir: -1, speed: 1.6, kind: 'fox', count: 3, stops: [1.6, 0.8] },
