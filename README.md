@@ -15,7 +15,7 @@ in it that comes through every few seconds.
   back one more row (watch what's behind her!). Getting hit **head-on** (its front reaching her) is what flattens her.
 - In the neighborhood, kids in Santa hats zoom down the streets on e-bikes, and on the sidewalks carolers stop
   to sing and dogs stop to sniff. **Presents fall out of the sky** too: a shadow with a red ring shows where one's
-  about to land. Don't be under it, but once it's down, grab it for points before a bike runs it over (or it fades).
+  about to land. Don't be under it, but once it's down, grab it for points before a bike runs it over (or it pops after 5 seconds).
   Snowmen, Christmas trees and trash cans in the front yards are in the way, like trees in the woods. If a
   **trash can rattles** (with eyes peeking out), a raccoon is about to knock it over and dash along that yard,
   grabbing any present in its way. Don't be in its path!
@@ -33,13 +33,13 @@ in it that comes through every few seconds.
 
 | | |
 | --- | --- |
-| Each new row reached | 10 |
+| Each new row reached | 10 (shown next to her) |
 | Reaching a checkpoint | 100, plus 3 per second left on the cold meter |
 | Reading glasses, fruitcake, present | 25 each (every section has a set) |
 | A present that fell from the sky | 50 |
 | All three in one section | 150 bonus |
 | Getting home | 300, plus 3 per second left on the cold meter, plus 100 per life left |
-| Eggnog | ×2 points, then ×3, ×4… with every glass, until she loses a life. Each glass makes her tipsy for longer (12 s, then 18, 24…): her steps wander sideways sometimes |
+| Eggnog | ×2 points, then ×3, ×4… with every glass, until she loses a life. Each glass makes her tipsy for longer (12 s, then 18, 24…): most steps forward or back veer left or right, more with every glass |
 
 The walk gets busier as it goes: each section is a little faster than the last, and the sleigh comes more often.
 

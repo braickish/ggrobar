@@ -238,7 +238,8 @@ test('eggnog stacks: each glass wobbles longer and a bit more, within reason', (
   assert.ok(L.nogTime(2) > L.nogTime(1) && L.nogTime(3) > L.nogTime(2));
   assert.ok(L.nogTime(1) >= 10);
   assert.ok(L.nogDrift(1) < L.nogDrift(3));
-  assert.ok(L.nogDrift(20) <= 0.55);
+  assert.ok(L.nogDrift(1) >= 0.5, 'the first glass already makes her veer most steps');
+  assert.ok(L.nogDrift(20) <= 0.85);
 });
 
 test('after a bounce she stumbles away from where she was going', () => {

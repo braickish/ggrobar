@@ -1,7 +1,7 @@
-import { SECTIONS } from './stages.js?v=202611102250';
-import * as L from './logic.js?v=202611102250';
-import * as Art from './art.js?v=202611102250';
-import { Sound } from './sound.js?v=202611102250';
+import { SECTIONS } from './stages.js?v=202611102302';
+import * as L from './logic.js?v=202611102302';
+import * as Art from './art.js?v=202611102302';
+import { Sound } from './sound.js?v=202611102302';
 
 const T = Art.TILE;
 const W = L.COLS * T;                           // 540
@@ -89,6 +89,7 @@ function newGame() {
 
 function startNight() {
   nog = 0;
+  maxRow = 0;
   tipped = new Set();
   route = L.buildRoute(SECTIONS, night);
   lanes = L.buildLanes(route.rows);
@@ -262,9 +263,15 @@ function hop(dir, stumble = false) {
   const toPond = route.rows[row].type === 'pond';
   // Eggnog makes her wander a little on forward/back steps (but never into a tree).
   if (!stumble && tipsy > 0 && (dir === 'up' || dir === 'down') && Math.random() < L.nogDrift(nog)) {
-    const dx = Math.random() < 0.5 ? -1 : 1;
-    const nx = toPond ? x + dx : L.snapCol(x + dx);
-    if (toPond || !L.isBlocked(route, row, Math.floor(nx))) x = nx;
+    const first = Math.random() < 0.5 ? -1 : 1;
+    for (const dx of [first, -first]) {
+      const nx = x + dx;
+      if (nx < 0.5 || nx > L.COLS - 0.5) continue;                 // not off the edge
+      if (!toPond && L.isBlocked(route, row, Math.floor(nx))) continue;
+      x = nx;
+      gran.facing = dx < 0 ? 'left' : 'right';
+      break;
+    }
   }
   if (!toPond) x = L.snapCol(x);
   else if (route.rows[fromRow].type !== 'pond' && (dir === 'left' || dir === 'right')) x = clamp(x, 0.5, L.COLS - 0.5);
@@ -294,7 +301,10 @@ function bump() {
 function landed() {
   const row = gran.row;
   if (row > maxRow) {
-    addScore(L.ROW_PTS * (row - maxRow), gran.x * T, rowTop(row) - 4, null);
+    const pts = L.ROW_PTS * (row - maxRow);
+    score += pts * mult();
+    updateHud();
+    floater(gran.x * T + 34, rowTop(row) + 4, `+${pts * mult()}`, mult() > 1 ? '#ffe9a8' : 'rgba(255,255,255,0.85)', 13);
     maxRow = row;
   }
   const col = Math.floor(gran.x);
@@ -533,8 +543,6 @@ function drawDropShadows() {
 function drawDrops(landed) {
   for (const d of drops) {
     if (d.landed !== landed) continue;
-    const left0 = L.DROP_WARN + L.DROP_STAY - d.t;
-    if (landed && left0 < 2 && Math.floor(left0 * 6) % 2) continue;   // blinks before it fades
     const fall = 0.4;                                        // it comes into view for the last bit
     const left = L.DROP_WARN - d.t;
     let y = rowTop(d.row) - 4, sq = 1;
@@ -699,6 +707,7 @@ function resize() {
   scale = Math.max(1, Math.floor(T * scale * dpr)) / (T * dpr);
   canvas.style.width = `${Math.floor(W * scale)}px`;
   canvas.style.height = `${Math.floor(H * scale)}px`;
+  document.documentElement.style.setProperty('--board-w', `${Math.floor(W * scale)}px`);
   canvas.width = Math.floor(W * scale * dpr);
   canvas.height = Math.floor(H * scale * dpr);
   Art.setScale(scale * dpr);

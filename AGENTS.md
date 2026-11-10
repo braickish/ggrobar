@@ -22,7 +22,7 @@ and a regularly swooping sleigh. Built for a parent and their kids; keep it appr
   sidewalk / two-lane street (a `road` row with no `kind` is an empty lane) / sidewalk (never two sidewalks in a row, tested), quiet at first, then Main Street at the top.
   Sections with `presentsEvery` drop presents near her (`pickDropSpot`): shadow + red ring for `DROP_WARN` s, then it
   lands and squashes her if she's on that tile. A landed present is worth `DROP_PTS` if she steps on it, vanishes if a
-  mover drives over its tile (`presentRunOver`), and fades after `DROP_STAY` s (blinking for the last 2).
+  mover drives over its tile (`presentRunOver`), and pops after `DROP_STAY` s (same sparkle as being run over; the user didn't want blinking).
   Lawn `C` is a trash can (the user found the lit bushes `B` too busy, so they're unused but still drawable). Sections
   with `raccoonsEvery` pick an upright can just ahead of her (`pickRaccoonCan`): it rattles with eyes peeking out for
   `RACCOON_WARN` s, tips over for good (`tipped`, reset each night), and a raccoon dashes along the row at
@@ -57,7 +57,9 @@ and a regularly swooping sleigh. Built for a parent and their kids; keep it appr
   (the user found 0.8 too small next to the carolers; she's now a little shorter than the adults)
   with her feet 10 units above the lane's bottom so she sits in the lane like the vehicles.
 - Eggnog stacks: `nog` counts glasses, points ×(nog + 1), kept through checkpoints until she loses a life (reset each
-  night). `tipsy` seconds (`nogTime`, longer per glass) make forward steps drift sideways (`nogDrift`, higher per glass).
+  night). `tipsy` seconds (`nogTime`, longer per glass) make most forward/back steps veer a column left or right, like she's tipsy (`nogDrift`, 50%+ and higher per glass;
+  the user wanted it obvious). The HUD header/status/progress are capped at the board's width via `--board-w` (set in
+  `resize()`), with type sized in container units so it fits.
 - Fonts: Mountains of Christmas (titles) and Gaegu (handwritten UI and in-game text) from Google Fonts.
 - `?debug` exposes `window.ggrobar` (see README). Screenshots/play tests were done with Playwright from
   `~/workspace/projects/witches-brew/node_modules`; there's no Playwright dependency here.

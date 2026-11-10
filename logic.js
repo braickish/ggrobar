@@ -34,11 +34,11 @@ export const COLD_PTS = 3;                     // per second left on the cold me
 export const NOG_TIME = 12;                    // seconds of wobble from the first glass
 export const NOG_TIME_EACH = 6;                // ...and this much more for every glass after it
 export const nogTime = (glasses) => NOG_TIME + NOG_TIME_EACH * (glasses - 1);
-export const nogDrift = (glasses) => Math.min(0.55, 0.22 + 0.08 * glasses);   // chance a forward step wobbles sideways
+export const nogDrift = (glasses) => Math.min(0.85, 0.5 + 0.12 * glasses);    // chance a step forward or back veers left or right
 
 // Presents falling out of the sky (the neighborhood): a shadow grows for DROP_WARN seconds, then it lands.
 export const DROP_WARN = 1.3;
-export const DROP_STAY = 9;                    // a landed present stays this long (blinking at the end)...
+export const DROP_STAY = 5;                    // a landed present stays this long, then pops...
 export const DROP_PTS = 50;                    // ...for Grandma to grab, unless something runs it over first
 
 // A small seeded random number generator, so a layout can be repeated.
