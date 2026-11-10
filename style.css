@@ -187,3 +187,43 @@ body {
   .stat .label { font-size: 11px; letter-spacing: 0.5px; }
   .stat span:last-child { font-size: 22px; }
 }
+
+.progress-wrap { width: 100%; max-width: 560px; margin: 0 auto; padding: 2px 30px 10px 26px; }
+.progress {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  background: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.35) 0 8px, transparent 8px 14px);
+}
+.progress .cp {
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border-radius: 50%;
+  background: #3c3f5e;
+  border: 2px solid var(--warm);
+}
+.progress .cp.done { background: var(--warm); box-shadow: 0 0 8px var(--warm); }
+.prog-gran, .prog-home {
+  position: absolute;
+  top: 50%;
+  font-size: 18px;
+  line-height: 1;
+  transform: translate(-50%, -55%);
+}
+.prog-gran { z-index: 1; transition: left 0.2s ease-out; }
+.prog-home { left: 100%; }
+
+.link-btn {
+  margin-top: 6px;
+  background: none;
+  border: none;
+  font-family: var(--body-font);
+  font-size: 17px;
+  font-weight: 700;
+  color: #6a6990;
+  text-decoration: underline;
+  cursor: pointer;
+}

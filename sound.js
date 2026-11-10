@@ -47,6 +47,7 @@ export const Sound = (() => {
       master.connect(ctx.destination);
     }
     if (ctx.state !== 'running') ctx.resume().catch(() => {});
+    makeNoise();
     const src = ctx.createBufferSource();
     src.buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
     src.connect(ctx.destination);
@@ -72,13 +73,15 @@ export const Sound = (() => {
   }
 
   let noiseBuf = null;
+  function makeNoise() {
+    if (noiseBuf || !ctx) return;
+    noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  }
   function noise(dur, { vol = 0.15, filter = 'lowpass', freq = 1000, to = null, q = 1, at = 0 } = {}) {
     if (!ready()) return;
-    if (!noiseBuf) {
-      noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
-      const d = noiseBuf.getChannelData(0);
-      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-    }
+    makeNoise();
     const t = ctx.currentTime + at;
     const src = ctx.createBufferSource();
     src.buffer = noiseBuf;
@@ -118,13 +121,24 @@ export const Sound = (() => {
       tone(f, 0.08, { to: f * 1.4, vol: 0.08, type: 'triangle' });
       noise(0.05, { vol: 0.03, filter: 'highpass', freq: 3000 });
     },
-    // Sleigh bells: a shaken cluster of tiny bells.
+    // Sleigh bells: a shaken cluster of tiny bells over a shimmer. Kept to a couple of dozen sound
+    // nodes, because making many at once caused a visible hitch on slow phones.
     sleighBells() {
-      for (let i = 0; i < 14; i++) {
-        const at = i * 0.075 + rand(0, 0.02);
-        bell(rand(2600, 3400), at, 0.03, 0.18);
-        noise(0.05, { vol: 0.025, filter: 'highpass', freq: 7000, at });
+      for (let i = 0; i < 10; i++) {
+        const at = i * 0.1 + rand(0, 0.02);
+        const f = rand(2600, 3400);
+        tone(f, 0.18, { at, vol: 0.035 });
+        tone(f * 2.76, 0.1, { at, vol: 0.015 });
       }
+      noise(1.1, { vol: 0.03, filter: 'highpass', freq: 7000 });
+    },
+    boing() {
+      tone(260, 0.25, { to: 620, vol: 0.09, type: 'triangle' });
+      tone(520, 0.2, { to: 1100, vol: 0.03, at: 0.05 });
+    },
+    bump() {
+      tone(140, 0.12, { to: 90, vol: 0.1, type: 'triangle' });
+      noise(0.08, { vol: 0.08, freq: 500 });
     },
     whoosh() { noise(0.7, { vol: 0.12, filter: 'bandpass', freq: 400, to: 2400, q: 0.8 }); },
     ho() {

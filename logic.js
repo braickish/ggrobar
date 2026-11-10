@@ -1,15 +1,19 @@
 // The game's rules with no drawing or sound, so they can be tested in Node.
-// Positions are in tiles: x runs 0..COLS left to right, rows run 0 (bottom) .. ROWS-1 (Grandma's yard).
+// Positions are in tiles: x runs 0..COLS left to right; rows count up from 0 (the party) to the yard.
 
 export const COLS = 9;
-export const ROWS = 13;
-export const HOME_ROW = ROWS - 1;
 export const MARGIN = 3;                       // tiles of loop hidden off each side
 export const LOOP = COLS + 2 * MARGIN;          // how far a mover travels before it comes round again
 
 // How long each kind of mover is, in tiles.
-export const KIND_W = { car: 1.5, plow: 2.6, van: 2.2, sled: 1.1, skater: 0.9 };
-export const HAZARD_TYPES = new Set(['road', 'hill', 'rink']);
+export const KIND_W = {
+  car: 1.5, plow: 2.6, van: 2.2, sled: 1.1, skater: 0.9,
+  bunny: 0.7, deer: 1.4, moose: 2.2, fox: 1.1,
+};
+// How quickly a lane gets going again after a stop (bunnies hop off at once, vans pull away slowly).
+export const KIND_ACCEL = { van: 2.5, bunny: 14, deer: 9, fox: 5 };
+export const HAZARD_TYPES = new Set(['road', 'hill', 'rink', 'trail']);
+export const SAFE_TYPES = new Set(['walk', 'forest', 'checkpoint', 'start', 'yard']);
 
 export const GRANDMA_HALF = 0.28;              // half of Grandma's width, for being hit
 export const SLEIGH_W = 4.6;                   // reindeer plus sleigh
@@ -18,14 +22,16 @@ export const SANTA_WARN = 1.4;                 // seconds of shadow and bells be
 
 // Points.
 export const ROW_PTS = 10;
-export const HOME_PTS = 100;
+export const CHECKPOINT_PTS = 100;
+export const HOME_PTS = 300;
+export const LIFE_PTS = 100;                   // per life left when she gets home
 export const PICKUP_PTS = 25;
-export const SET_BONUS = 150;                  // glasses + fruitcake + present in one crossing
+export const SET_BONUS = 150;                  // glasses + fruitcake + present in one section
 export const COLD_PTS = 3;                     // per second left on the cold meter
 export const NOG_TIME = 5;
 export const NOG_DRIFT = 0.35;                 // chance each forward hop wobbles sideways
 
-// A small seeded random number generator, so a lane layout can be repeated.
+// A small seeded random number generator, so a layout can be repeated.
 export function rng(seed = 1) {
   let s = seed >>> 0 || 1;
   return () => {
@@ -36,27 +42,55 @@ export function rng(seed = 1) {
   };
 }
 
-// How hard round r (0, 1, 2, ...) is.
-export function roundSetup(r, stageCount = 3) {
-  const cycle = Math.floor(r / stageCount);
-  return {
-    stage: r % stageCount,
-    cycle,
-    speedMul: 1 + 0.15 * cycle + 0.04 * (r % stageCount),
-    santaEvery: Math.max(4, 8 - 0.8 * r),
-    coldTime: Math.max(28, 40 - 3 * cycle),
-    snow: Math.min(260, 70 + 30 * r),
-  };
+// Stitch the sections into one long path: the start, then each section (with a checkpoint row
+// before every section after the first), then Grandma's yard. night 0 is the first Christmas Eve;
+// each night after that is faster and the sleigh comes more often.
+export function buildRoute(sections, night = 0) {
+  const rows = [{ type: 'start', section: 0 }];
+  const info = [];
+  sections.forEach((sec, i) => {
+    if (i > 0) rows.push({ type: 'checkpoint', name: sec.checkpoint, section: i });
+    const startRow = rows.length - 1;          // the start row, or the checkpoint just added
+    for (const def of sec.rows) {
+      rows.push({ ...def, section: i, mul: (sec.speed ?? 1) * (1 + 0.15 * night) });
+    }
+    info.push({
+      name: sec.name,
+      checkpoint: sec.checkpoint ?? null,
+      startRow,                                // the start or checkpoint row she respawns on
+      endRow: rows.length - 1,
+      coldTime: Math.round(sec.rows.length * 2.6 + 10),
+      santaEvery: Math.max(3.5, sec.santaEvery * (1 - 0.1 * night)),
+    });
+  });
+  rows.push({ type: 'yard', section: sections.length - 1 });
+  for (const r of rows) if (r.trees) r.blocked = treeCols(r.trees);
+  return { rows, sections: info, homeRow: rows.length - 1 };
+}
+
+export function treeCols(pattern) {
+  const s = new Set();
+  [...pattern].forEach((ch, i) => { if (ch === 'T' || ch === 't') s.add(i); });
+  return s;
+}
+
+export function isBlocked(route, row, col) {
+  const def = route.rows[row];
+  return !!(def && def.blocked && def.blocked.has(col));
+}
+
+export function sectionOf(route, row) {
+  return route.rows[Math.max(0, Math.min(route.rows.length - 1, row))].section;
 }
 
 export function widthOf(def) {
   return def.kind === 'floe' ? def.size : KIND_W[def.kind];
 }
 
-// Turn a stage's row list into live lanes with their movers spread evenly round the loop.
-export function buildLanes(stage, speedMul = 1, rand = Math.random) {
-  return stage.rows.map((def, row) => {
-    const lane = { ...def, row, objs: [], v: 0, moving: 1, clock: rand() * 10 };
+// Give every moving row its movers, spread evenly round the loop.
+export function buildLanes(rows, rand = Math.random) {
+  return rows.map((def, row) => {
+    const lane = { ...def, row, objs: [], v: 0, moving: 1, clock: rand() * 10, accel: KIND_ACCEL[def.kind] ?? 2.5 };
     if (!def.kind) return lane;
     const w = widthOf(def);
     const step = LOOP / def.count;
@@ -70,12 +104,13 @@ export function buildLanes(stage, speedMul = 1, rand = Math.random) {
         variant: Math.floor(rand() * 4),
       });
     }
-    lane.v = def.dir * def.speed * speedMul;
+    lane.v = def.dir * def.speed * (def.mul ?? 1);
     return lane;
   });
 }
 
-// Is the lane moving right now? Vans stop together to sing, then pull away again.
+// Is the lane moving right now? Some lanes stop and start together: carolers stop to sing,
+// bunnies hop in bursts, deer freeze and then dash.
 export function laneTarget(lane) {
   if (!lane.stops) return 1;
   const [go, halt] = lane.stops;
@@ -87,7 +122,7 @@ export function stepLanes(lanes, dt) {
     if (!lane.objs.length) continue;
     lane.clock += dt;
     const target = laneTarget(lane);
-    lane.moving += Math.sign(target - lane.moving) * Math.min(Math.abs(target - lane.moving), dt * 2.5);
+    lane.moving += Math.sign(target - lane.moving) * Math.min(Math.abs(target - lane.moving), dt * lane.accel);
     const dx = lane.v * lane.moving * dt;
     for (const o of lane.objs) {
       o.x += dx;
@@ -115,6 +150,15 @@ export function hazardAt(lane, x, half = GRANDMA_HALF) {
   return null;
 }
 
+// Was that a head-on hit (the mover's front reached her: splat) or did she walk into its side or back
+// (she just bounces off)? At the moment they first touch, the front has only just reached her; if it's
+// already well past her, she must have stepped into the side.
+export const HEAD_ON_DEPTH = 0.35;
+export function hitKind(o, dir, x, half = GRANDMA_HALF) {
+  const depth = dir > 0 ? (o.x + o.w - 0.12) - (x - half) : (x + half) - (o.x + 0.12);
+  return depth < HEAD_ON_DEPTH ? 'front' : 'side';
+}
+
 // The floe Grandma is standing on, if any.
 export function floeUnder(lane, x, time) {
   for (const o of lane.objs) {
@@ -124,13 +168,18 @@ export function floeUnder(lane, x, time) {
   return null;
 }
 
-// Santa picks a row: usually one near Grandma, never the start or her yard.
-export function pickSantaRow(grandmaRow, rand = Math.random) {
+// Santa picks a row he can swoop through (rows lo..hi, skipping ones canUse rejects):
+// usually one near Grandma.
+export function pickSantaRow(grandmaRow, lo, hi, canUse = () => true, rand = Math.random) {
   if (rand() < 0.65) {
-    const r = grandmaRow + Math.round(rand() * 4 - 2);
-    if (r >= 1 && r <= HOME_ROW - 1) return r;
+    for (let tries = 0; tries < 6; tries++) {
+      const r = grandmaRow + Math.round(rand() * 4 - 2);
+      if (r >= lo && r <= hi && canUse(r)) return r;
+    }
   }
-  return 1 + Math.floor(rand() * (HOME_ROW - 1));
+  const options = [];
+  for (let r = lo; r <= hi; r++) if (canUse(r)) options.push(r);
+  return options.length ? options[Math.floor(rand() * options.length)] : null;
 }
 
 // Where the sleigh's front is at time t after the warning ends (dir 1 enters from the left).
@@ -157,10 +206,34 @@ export function coldBonus(secondsLeft) {
   return Math.ceil(Math.max(0, secondsLeft)) * COLD_PTS;
 }
 
-// Rows where pickups can sit: solid rows that aren't the start or the yard.
-export function pickupRows(stage) {
-  return stage.rows
-    .map((def, row) => ({ def, row }))
-    .filter(({ def, row }) => row > 0 && row < HOME_ROW && def.type !== 'pond')
-    .map(({ row }) => row);
+// Places a pickup can sit in a section: solid rows inside it, not on a tree.
+export function pickupSpots(route, section) {
+  const spots = [];
+  route.rows.forEach((def, row) => {
+    if (def.section !== section) return;
+    if (def.type === 'pond' || def.type === 'start' || def.type === 'checkpoint' || def.type === 'yard') return;
+    for (let col = 0; col < COLS; col++) if (!isBlocked(route, row, col)) spots.push({ row, col });
+  });
+  return spots;
+}
+
+// Can Grandma get from the start to the yard, walking round the trees? (Movers are ignored:
+// they always leave gaps, which the tests check separately.)
+export function routeIsWalkable(route) {
+  const seen = new Set();
+  const key = (r, c) => r * 100 + c;
+  const queue = [];
+  for (let c = 0; c < COLS; c++) if (!isBlocked(route, 0, c)) { queue.push([0, c]); seen.add(key(0, c)); }
+  while (queue.length) {
+    const [r, c] = queue.shift();
+    if (r === route.homeRow) return true;
+    for (const [dr, dc] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nr = r + dr, nc = c + dc;
+      if (nr < 0 || nr > route.homeRow || nc < 0 || nc >= COLS) continue;
+      if (isBlocked(route, nr, nc) || seen.has(key(nr, nc))) continue;
+      seen.add(key(nr, nc));
+      queue.push([nr, nc]);
+    }
+  }
+  return false;
 }

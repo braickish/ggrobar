@@ -6,28 +6,45 @@ and a regularly swooping sleigh. Built for a parent and their kids; keep it appr
 
 - The name is an acronym the user chose. Keep the song's lyrics, melody and full title out of the game,
   and don't copy Frogger's look, layout or sounds; the lane-crossing genre itself is fine.
-- Static site, no build step, ES modules: `index.html`, `style.css`, `stages.js` (row layouts, meant to be
-  edited by hand), `logic.js` (pure rules, imported by the game and by Node tests), `art.js` (all drawing),
-  `sound.js` (Web Audio synth, no files; iPhone unlock copied from Witch's Brew), `game.js` (loop, input, rendering).
-- Board: 9 columns × 13 rows of 60-unit tiles under a 130-unit sky strip with the cottage (540×910 logical),
-  scaled to fit. Row 0 is the start; row 12 is the yard (home). Fixed 60 Hz update.
+- Static site, no build step, ES modules: `index.html`, `style.css`, `stages.js` (the walk's sections and rows,
+  meant to be edited by hand), `logic.js` (pure rules, imported by the game and by Node tests), `art.js` (all
+  drawing), `sound.js` (Web Audio synth, no files; iPhone unlock copied from Witch's Brew), `game.js` (loop, input, rendering).
+- One long walk, not rounds: `buildRoute` stitches the sections into ~68 rows: a `start` row, each section's rows,
+  a `checkpoint` row before every section after the first, and Grandma's `yard` (the only house) at the end.
+  Checkpoints refill the cold meter (per-section `coldTime`) and are where she respawns. Reaching the yard is the
+  win; "Next Christmas Eve" rebuilds the route with `night + 1` (faster, more sleigh) keeping score and lives.
+- Scrolling: world coordinates, row r spans y = -(r+1)·T..-r·T. `cam` is the row at the bottom of the 910-unit view;
+  it glides forward to keep her `GRAN_FROM_BOTTOM` rows up and never moves back except on respawn. She can't step
+  below the screen. The sky + cottage sit above the yard, and `camMax` stops the camera with them filling the top.
+- Forest: `forest` rows have `trees: 'T..TT.T.T'` (blocking tiles, drawn as tall still sprites); `trail` rows have
+  animals. Animal personalities are lane-wide stop/go cycles (`stops`, `KIND_ACCEL`) so spacing stays even.
+  `routeIsWalkable` (BFS) and the gap tests in `tests/logic.test.mjs` guard against impossible layouts.
 - Movers loop over a 15-tile track (3 hidden tiles each side) with even spacing, so gaps never change.
-  `tests/logic.test.mjs` checks every hazard row leaves a gap ≥ 1.8 tiles and pond rows don't leave long waits.
-- Santa: idle → warn (bells, bell icon and a growing shadow on the chosen row, `SANTA_WARN` s) → swoop.
-  Row picking favours rows near Grandma (`pickSantaRow`). Interval comes from `roundSetup(r).santaEvery`.
+- Santa: idle → warn (bells, plus a red glow washing in from the row's edge with the lead reindeer's red nose
+  peeking in, `SANTA_WARN` s) → swoop (the nose lights the row ahead). The lead reindeer has a red nose but is
+  deliberately not named (the well-known red-nosed reindeer is a trademarked character). Row picking favours
+  rows near Grandma (`pickSantaRow`), limited to rows on screen. Interval comes from each section's `santaEvery`.
+- Hits: `hitKind` decides head-on (the mover's front has only just reached her → splat) vs side (she stepped into
+  its side/back → `bounceOff`: she reverses her step from exactly where she is and twirls the way it was going,
+  no life lost). A still Grandma is always reached front-first (tested, even for the fastest deer). The sleigh
+  always splats.
 - Art: hand-drawn storybook style drawn with canvas calls. Every shape goes through `sketchy()` in art.js, a
   Proxy over the 2D context that records path commands and redraws them as wobbly lines (fill and outline
-  wobble differently; dark ink outlines get a second thinner pass). Lines "boil": `sprite()` caches
-  `BOIL_FRAMES` versions of everything and `setTime()` swaps them ~6×/s. Sprites get a crayon texture.
-  Don't draw complex sketchy shapes every frame (it cost frames on a slowed CPU); cache them as sprites.
-  Grandma is cached per pose (`grandmaPose`: facing × step progress in quarters × which foot), the cottage
-  as one sprite with smoke and twinkle glows drawn live. Deaths draw sketchy live (they're brief).
-  Row backgrounds (with pencil hatching on snow) and the crayon grain are prerendered per stage/resize.
+  wobble differently; dark ink outlines get a second thinner pass). Moving things "boil": `sprite()` caches
+  `BOIL_FRAMES` versions and `setTime()` swaps them ~6×/s. Scenery (house, trees, lampposts) uses `still`
+  sprites that never boil (the boiling house looked like it was shaking). Sprites get a crayon texture.
+- Performance (tested with Chrome's CPU throttled 4×, phone-sized at DPR 3): don't draw complex sketchy shapes every
+  frame; cache them. Grandma is cached per pose (`grandmaPose`), the cottage as one sprite with smoke and twinkle
+  live. The ground is a ring of 32 row slots on one canvas (`paintRow`/`drawGround`), copied to the screen
+  pixel-for-pixel in ≤2 runs; `scale` is rounded so a row is a whole number of pixels. Drawing many separate
+  scaled row images per frame, or one scaled strip, halved the frame rate. Tree/lamppost sprites are kept
+  tight (`RISE`) because 30 trees can be on screen. `Art.warmTasks()` pre-builds every sprite a few ms per
+  frame after load. Sleigh bells were trimmed to ~22 audio nodes for the same reason.
 - Grandma toddles (`HOP_TIME` 0.17 s, eased, 4-unit lift, rocks side to side, alternating foot) at 0.8 scale
   with her feet 10 units above the lane's bottom so she sits in the lane like the vehicles.
 - Fonts: Mountains of Christmas (titles) and Gaegu (handwritten UI and in-game text) from Google Fonts.
 - `?debug` exposes `window.ggrobar` (see README). Screenshots/play tests were done with Playwright from
   `~/workspace/projects/witches-brew/node_modules`; there's no Playwright dependency here.
 - Deployed on GitHub Pages from `main` at the repo root: https://braickish.github.io/ggrobar/
-- Ideas for later: leaderboard (same Supabase pattern as Witch's Brew), the kids' own drawings, more stages,
-  a "cocoa" extra life.
+- Ideas for later: leaderboard (same Supabase pattern as Witch's Brew; a fixed-length walk suits it), the kids'
+  own drawings, more sections, a "cocoa" extra life, raccoons in town.

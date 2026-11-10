@@ -21,7 +21,7 @@
     <div class="scores">
       <div class="stat"><span class="label">Score</span><span id="score">0</span></div>
       <div class="stat"><span class="label">Best</span><span id="best">0</span></div>
-      <div class="stat"><span class="label">Round</span><span id="round">1</span></div>
+      <div class="stat"><span class="label">Night</span><span id="night">1</span></div>
     </div>
   </header>
 
@@ -32,6 +32,13 @@
       <div class="cold-bar"><div id="cold-fill" class="cold-fill"></div></div>
     </div>
     <span id="nog" class="nog hidden">🥛 ×2</span>
+  </div>
+
+  <div class="progress-wrap" aria-hidden="true">
+    <div id="progress" class="progress">
+      <span id="prog-gran" class="prog-gran">👵</span>
+      <span class="prog-home">🏠</span>
+    </div>
   </div>
 
   <main id="stage">
@@ -46,9 +53,10 @@
     <div id="title-panel" class="panel">
       <div class="card">
         <h2>GGROBAR</h2>
-        <p>It's Christmas Eve, and Grandma's walking home from the party. Help her cross the roads, the sledding hill and the frozen pond.</p>
-        <p><strong>Watch for the shadow.</strong> When you hear sleigh bells, a sleigh is about to swoop through that row.</p>
-        <p class="small">Grab her reading glasses, fruitcake and present for a bonus. Eggnog doubles your points, but she gets a bit wobbly. Don't let her get too cold!</p>
+        <p>It's Christmas Eve, and Grandma's walking home from the party. Help her through town, over the sledding hill, across the frozen pond and through the woods.</p>
+        <p><strong>Watch for the red glow.</strong> When you hear sleigh bells and see a red light at the side of a row, the sleigh is about to swoop through it.</p>
+        <p class="small">Walking into the side of a car or sled just bounces her back. It's getting hit head-on that flattens her.</p>
+        <p class="small">Checkpoints along the way warm her up, and she starts there again if she gets flattened. Grab her reading glasses, fruitcake and present for a bonus. Eggnog doubles your points, but she gets a bit wobbly.</p>
         <button id="start-btn" class="big-btn">Start walking</button>
         <p class="keys">Arrow keys or WASD · Swipe or tap on a phone</p>
       </div>
@@ -58,9 +66,20 @@
       <div class="card">
         <h2>Oh, Grandma!</h2>
         <p class="final">Score <span id="final-score">0</span></p>
-        <p class="small">You made it to round <span id="final-round">1</span>.</p>
+        <p class="small">You made it to <span id="final-place">Main Street</span>.</p>
         <p id="new-best" class="new-best hidden">New best!</p>
         <button id="again-btn" class="big-btn">Try again</button>
+      </div>
+    </div>
+    <div id="win-panel" class="panel hidden">
+      <div class="card">
+        <h2 id="win-title">Home for Christmas!</h2>
+        <p class="final">Score <span id="win-score">0</span></p>
+        <p class="small">Walk time <span id="win-time">0:00</span> · Lives left <span id="win-lives">3</span></p>
+        <p id="win-best" class="new-best hidden">New best!</p>
+        <button id="next-btn" class="big-btn">Next Christmas Eve</button>
+        <p class="small">It's a year later: everything's faster and the sleigh comes more often. Your score and lives carry on.</p>
+        <button id="fresh-btn" class="link-btn">Start over from the beginning</button>
       </div>
     </div>
   </main>

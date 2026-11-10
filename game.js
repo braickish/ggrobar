@@ -1,18 +1,19 @@
-import { STAGES } from './stages.js';
+import { SECTIONS } from './stages.js';
 import * as L from './logic.js';
 import * as Art from './art.js';
 import { Sound } from './sound.js';
 
 const T = Art.TILE;
-const TOP = 130;                                // the sky and cottage strip above the rows
 const W = L.COLS * T;                           // 540
-const H = TOP + L.ROWS * T;                     // 910
+const H = 910;                                  // the view is a bit over 15 rows tall
+const SKY = 130;                                // the night sky and cottage above Grandma's yard
 const HOP_TIME = 0.17;                          // one toddling step
+const SPIN_TIME = 0.5;                          // the twirl when she bounces off something
 const GRAN_SCALE = 0.8;
+const GRAN_FROM_BOTTOM = 3.5;                   // the camera keeps her about this many rows up the screen
 const DEATH_TIME = 1.7;
-const HOME_TIME = 2.4;
-const BANNER_TIME = 2.2;
-const START = { x: 4.5, row: 0 };
+const HOME_TIME = 2.6;
+const BANNER_TIME = 2.4;
 
 const params = new URLSearchParams(location.search);
 const DEBUG = params.has('debug');
@@ -22,9 +23,11 @@ const canvas = $('game');
 const ctx = canvas.getContext('2d');
 const stageEl = $('stage');
 
-const rowTop = (row) => TOP + (L.ROWS - 1 - row) * T;
+// World coordinates: row r covers y from -(r + 1) * T to -r * T, so the walk goes up the screen.
+const rowTop = (row) => -(row + 1) * T;
 const rowFeet = (row) => rowTop(row) + T - 10;     // she stands in the middle of the lane, like the cars
 const rand = (lo, hi) => lo + Math.random() * (hi - lo);
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 // Ease in and out, so each step starts gently and settles into place.
 const ease = (t) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
 
@@ -32,12 +35,14 @@ const load = (k, d) => { try { const v = localStorage.getItem(k); return v === n
 const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
 
 // ---- State ----
-let state = 'title';          // title | playing | dying | home | over
-let round = 0;
-let setup = L.roundSetup(0);
-let stage = STAGES[0];
-let lanes = [];
+let state = 'title';          // title | playing | dying | home | won | over
+let night = 0;                // 0 = the first Christmas Eve; each next one is harder
+let route = L.buildRoute(SECTIONS, 0);
+let lanes = L.buildLanes(route.rows);
+let reached = 0;              // the furthest section whose checkpoint she's reached (where she restarts)
+let cam = 0;                  // the row at the bottom of the screen (fractional while it glides)
 let time = 0;
+let walkTime = 0;
 let score = 0;
 let best = load('ggrobar-best', 0);
 let lives = 3;
@@ -45,75 +50,85 @@ let cold = 40;
 let nog = 0;
 let maxRow = 0;
 let pickups = [];
-let gotSet = 0;
 let floaters = [];
 let particles = [];
 let snow = [];
 let banner = null;
-let death = null;             // { kind, by, x, y, t }
+let death = null;             // { kind, by, x, row, t }
 let homeT = 0;
 let invincible = false;
 let paused = false;            // debug only: stop the clock to look at a moment
 
-const gran = { x: START.x, row: START.row, fromX: START.x, fromRow: START.row, hop: 1, facing: 'up', step: 1 };
+const gran = {
+  x: 4.5, row: 0, fromX: 4.5, fromRow: 0, hop: 1, facing: 'up', step: 1,
+  prevX: 4.5, prevRow: 0, prevFloe: null,      // where this step started, to bounce back to
+  bouncing: false, spinT: 0, spinDir: 1,
+};
 let queued = null;
-
 let santa = { phase: 'idle', next: 5, t: 0, row: 1, dir: 1 };
 
-// ---- Rounds and lives ----
+const camMax = () => route.homeRow - (H - SKY) / T + 1;     // where the house fills the top of the screen
+const camFor = (row) => clamp(row - GRAN_FROM_BOTTOM, 0, camMax());
+const section = () => route.sections[reached];
+
+// ---- Starting, checkpoints, lives ----
 function newGame() {
-  round = 0;
+  night = 0;
   score = 0;
   lives = 3;
-  startRound();
+  startNight();
+}
+
+function startNight() {
+  route = L.buildRoute(SECTIONS, night);
+  lanes = L.buildLanes(route.rows);
+  reached = 0;
+  walkTime = 0;
+  resetRing();
+  makeSnow(90 + night * 40);
+  placePickups();
+  respawn();
+  cam = camFor(0);
+  santa = { phase: 'idle', next: 5, t: 0, row: 1, dir: 1 };
+  banner = { text: night ? `Christmas Eve #${night + 1}` : 'Christmas Eve', sub: route.sections[0].name, t: 0 };
   setState('playing');
   updateHud();
+  buildProgress();
 }
 
-function startRound() {
-  setup = L.roundSetup(round, STAGES.length);
-  stage = STAGES[setup.stage];
-  lanes = L.buildLanes(stage, setup.speedMul);
-  buildBackground();
-  makeSnow(setup.snow);
-  banner = { text: `Round ${round + 1}`, sub: stage.name, t: 0 };
-  santa = { phase: 'idle', next: Math.max(3, setup.santaEvery * 0.6), t: 0, row: 1, dir: 1 };
-  freshCrossing();
-}
-
-// Back to the start for a new crossing (a new round or after losing a life).
-function freshCrossing() {
-  Object.assign(gran, { x: START.x, row: START.row, fromX: START.x, fromRow: START.row, hop: 1, facing: 'up' });
+// Back to the last checkpoint (or the party) after losing a life.
+function respawn() {
+  const row = section().startRow;
+  Object.assign(gran, { x: 4.5, row, fromX: 4.5, fromRow: row, hop: 1, facing: 'up', bouncing: false, spinT: 0 });
   queued = null;
-  cold = setup.coldTime;
+  cold = section().coldTime;
   nog = 0;
-  maxRow = 0;
+  maxRow = Math.max(maxRow, row);
   death = null;
-  placePickups();
+  cam = Math.min(cam, camFor(row));
 }
 
 function placePickups() {
-  const rows = L.pickupRows(stage);
-  const used = new Set();
-  const spot = () => {
-    for (let tries = 0; tries < 50; tries++) {
-      const row = rows[Math.floor(Math.random() * rows.length)];
-      const col = Math.floor(Math.random() * L.COLS);
-      const k = `${row},${col}`;
-      if (!used.has(k)) { used.add(k); return { row, col }; }
-    }
-    return { row: rows[0], col: 0 };
-  };
-  pickups = ['glasses', 'fruitcake', 'present'].map((kind) => ({ kind, ...spot(), got: false }));
-  if (Math.random() < 0.6) pickups.push({ kind: 'eggnog', ...spot(), got: false });
-  gotSet = 0;
+  pickups = [];
+  route.sections.forEach((sec, i) => {
+    const spots = L.pickupSpots(route, i);
+    const take = () => spots.splice(Math.floor(Math.random() * spots.length), 1)[0];
+    for (const kind of ['glasses', 'fruitcake', 'present']) pickups.push({ kind, section: i, ...take(), got: false });
+    if (Math.random() < 0.7) pickups.push({ kind: 'eggnog', section: i, ...take(), got: false });
+  });
 }
 
 function setState(s) {
   state = s;
   $('title-panel').classList.toggle('hidden', s !== 'title');
   $('over-panel').classList.toggle('hidden', s !== 'over');
+  $('win-panel').classList.toggle('hidden', s !== 'won');
 }
+
+const HIT_WORDS = {
+  car: 'Splat!', plow: 'Plowed!', van: 'Splat!', sled: 'Wheee… oof!', skater: 'Whoops!',
+  bunny: 'Bunny bonk!', deer: 'Oh deer!', moose: 'Moose on the loose!', fox: 'Outfoxed!',
+};
 
 function loseLife(kind, by) {
   if (state !== 'playing' || invincible) return;
@@ -123,8 +138,8 @@ function loseLife(kind, by) {
   if (kind === 'squash') Sound.splat();
   else if (kind === 'splash') Sound.splash();
   else Sound.freeze();
-  const words = { squash: by === 'sleigh' ? 'Run over by a reindeer!' : 'Splat!', splash: 'Sploosh!', freeze: 'Brrr!' };
-  floater(x * T, rowTop(row) - 6, words[kind], '#ffffff', by === 'sleigh' ? 24 : 28);
+  const words = kind === 'squash' ? (by === 'sleigh' ? 'Run over by a reindeer!' : HIT_WORDS[by] ?? 'Splat!') : kind === 'splash' ? 'Sploosh!' : 'Brrr!';
+  floater(x * T, rowTop(row) - 6, words, '#ffffff', by === 'sleigh' ? 24 : 28);
   if (by === 'sleigh') floater(x * T, rowTop(row) + T + 26, 'Ho ho… oh no', C_GOLD, 18, 0.25);
 }
 
@@ -137,38 +152,64 @@ function afterDeath() {
     return;
   }
   Sound.lifeLost();
-  freshCrossing();
+  respawn();
   santa.phase = 'idle';
   santa.next = Math.max(santa.next, 2.5);
   setState('playing');
 }
 
-function gameOver() {
+function saveBest() {
   const isBest = score > best;
   if (isBest) { best = score; save('ggrobar-best', best); }
+  return isBest;
+}
+
+function gameOver() {
+  const isBest = saveBest();
   $('final-score').textContent = score;
-  $('final-round').textContent = round + 1;
+  $('final-place').textContent = route.sections[L.sectionOf(route, gran.row)].name;
   $('new-best').classList.toggle('hidden', !isBest);
   updateHud();
   setState('over');
 }
 
+function reachCheckpoint(i) {
+  reached = i;
+  const pts = L.CHECKPOINT_PTS + L.coldBonus(cold);
+  addScore(pts, gran.x * T, rowTop(gran.row) - 6, `Checkpoint! +${pts * (nog > 0 ? 2 : 1)}`);
+  cold = section().coldTime;
+  Sound.allSet();
+  banner = { text: section().checkpoint, sub: `Next: ${section().name}`, t: 0 };
+  sparkle(gran.x * T, rowTop(gran.row) + 20, '#ffd27a');
+}
+
 function reachHome() {
-  const bonus = L.HOME_PTS + L.coldBonus(cold);
-  addScore(bonus, gran.x * T, rowTop(L.HOME_ROW) + 10, `Home! +${bonus}`);
+  const pts = L.HOME_PTS + L.coldBonus(cold) + lives * L.LIFE_PTS;
+  addScore(pts, gran.x * T, rowTop(route.homeRow) + 10, `Home! +${pts * (nog > 0 ? 2 : 1)}`);
   Sound.home();
   homeT = 0;
   setState('home');
-  for (let i = 0; i < 40; i++) {
-    particles.push({ x: W / 2 + rand(-30, 30), y: TOP - 30, vx: rand(-3, 3), vy: rand(-5, -1), life: rand(0.8, 1.6), t: 0, c: ['#ffd25a', '#ff6a5a', '#6ad08a', '#6ab4ff'][i % 4], r: rand(2, 4) });
+  const door = rowTop(route.homeRow) - 40;
+  for (let i = 0; i < 60; i++) {
+    particles.push({ x: W / 2 + rand(-40, 40), y: door, vx: rand(-4, 4), vy: rand(-6, -1), life: rand(0.9, 1.8), t: 0, c: ['#ffd25a', '#ff6a5a', '#6ad08a', '#6ab4ff'][i % 4], r: rand(2, 4), star: i % 2 === 0 });
   }
 }
 
-function nextRound() {
-  round++;
-  startRound();
-  setState('playing');
+function showWin() {
+  const isBest = saveBest();
+  $('win-score').textContent = score;
+  const m = Math.floor(walkTime / 60), s = Math.floor(walkTime % 60);
+  $('win-time').textContent = `${m}:${String(s).padStart(2, '0')}`;
+  $('win-lives').textContent = lives;
+  $('win-best').classList.toggle('hidden', !isBest);
+  $('win-title').textContent = night ? `Home again! (Christmas Eve #${night + 1})` : 'Home for Christmas!';
   updateHud();
+  setState('won');
+}
+
+function nextNight() {
+  night++;
+  startNight();
 }
 
 // ---- Score ----
@@ -192,22 +233,40 @@ function tryMove(dir) {
 function hop(dir) {
   const fromRow = gran.row;
   let row = fromRow, x = gran.x;
-  if (dir === 'up') row = Math.min(L.HOME_ROW, row + 1);
+  if (dir === 'up') row = Math.min(route.homeRow, row + 1);
   if (dir === 'down') row = Math.max(0, row - 1);
   if (dir === 'left') x -= 1;
   if (dir === 'right') x += 1;
   gran.facing = dir;
-  // Eggnog makes her wander a little on forward/back hops.
-  if (nog > 0 && (dir === 'up' || dir === 'down') && Math.random() < L.NOG_DRIFT) x += Math.random() < 0.5 ? -1 : 1;
-  const toType = stage.rows[row].type;
-  if (toType !== 'pond') x = L.snapCol(x);
-  else if (stage.rows[fromRow].type !== 'pond' && (dir === 'left' || dir === 'right')) x = Math.min(L.COLS - 0.5, Math.max(0.5, x));
+  // She can step back a little, but not off the bottom of the screen.
+  if (row < cam + 0.2) { bump(); return; }
+  const toPond = route.rows[row].type === 'pond';
+  // Eggnog makes her wander a little on forward/back steps (but never into a tree).
+  if (nog > 0 && (dir === 'up' || dir === 'down') && Math.random() < L.NOG_DRIFT) {
+    const dx = Math.random() < 0.5 ? -1 : 1;
+    const nx = toPond ? x + dx : L.snapCol(x + dx);
+    if (toPond || !L.isBlocked(route, row, Math.floor(nx))) x = nx;
+  }
+  if (!toPond) x = L.snapCol(x);
+  else if (route.rows[fromRow].type !== 'pond' && (dir === 'left' || dir === 'right')) x = clamp(x, 0.5, L.COLS - 0.5);
+  if (!toPond && L.isBlocked(route, row, Math.floor(x))) { bump(); return; }
   if (row === fromRow && x === gran.x) return;
+  gran.prevX = gran.x; gran.prevRow = fromRow;
+  const floe = route.rows[fromRow].type === 'pond' ? L.floeUnder(lanes[fromRow], gran.x, time) : null;
+  gran.prevFloe = floe ? { o: floe, off: gran.x - floe.x } : null;
   gran.fromX = gran.x; gran.fromRow = fromRow;
   gran.x = x; gran.row = row;
   gran.hop = 0;
   gran.step = -gran.step;
   Sound.hop();
+}
+
+// Walked into a tree (or the bottom of the screen): a little bump, no harm done.
+let bumpT = 0;
+function bump() {
+  if (bumpT > 0) return;
+  bumpT = 0.18;
+  Sound.bump();
 }
 
 function landed() {
@@ -227,28 +286,34 @@ function landed() {
     } else {
       Sound.pickup();
       addScore(L.PICKUP_PTS, gran.x * T, rowTop(row) - 8, `${NAMES[p.kind]} +${L.PICKUP_PTS * (nog > 0 ? 2 : 1)}`);
-      gotSet++;
-      if (gotSet === 3) {
+      const set = pickups.filter((q) => q.section === p.section && q.kind !== 'eggnog');
+      if (set.every((q) => q.got)) {
         Sound.allSet();
-        addScore(L.SET_BONUS, W / 2, H / 2, `All set! +${L.SET_BONUS * (nog > 0 ? 2 : 1)}`);
+        addScore(L.SET_BONUS, gran.x * T, rowTop(row) - 50, `All set! +${L.SET_BONUS * (nog > 0 ? 2 : 1)}`);
       }
     }
     sparkle((p.col + 0.5) * T, rowTop(row) + T / 2, '#ffe9a8');
   }
-  if (row === L.HOME_ROW) reachHome();
+  const def = route.rows[row];
+  if (def.type === 'checkpoint' && def.section > reached) reachCheckpoint(def.section);
+  if (row === route.homeRow) reachHome();
 }
 const NAMES = { glasses: 'Reading glasses', fruitcake: 'Fruitcake', present: 'Present' };
 const C_GOLD = '#ffd27a';
 
 // ---- Santa ----
+const santaCanUse = (row) => {
+  const t = route.rows[row]?.type;
+  return t && t !== 'start' && t !== 'checkpoint' && t !== 'yard';
+};
 function updateSanta(dt) {
   if (santa.phase === 'idle') {
     santa.next -= dt;
     if (santa.next <= 0 && state === 'playing') {
-      santa.phase = 'warn';
-      santa.t = 0;
-      santa.row = L.pickSantaRow(gran.row);
-      santa.dir = Math.random() < 0.5 ? 1 : -1;
+      const lo = Math.ceil(cam) + 1, hi = Math.min(route.homeRow - 1, Math.floor(cam + H / T) - 2);
+      const row = L.pickSantaRow(gran.row, lo, hi, santaCanUse);
+      if (row === null) { santa.next = 1; return; }
+      Object.assign(santa, { phase: 'warn', t: 0, row, dir: Math.random() < 0.5 ? 1 : -1 });
       Sound.sleighBells();
     }
   } else if (santa.phase === 'warn') {
@@ -265,7 +330,8 @@ function updateSanta(dt) {
     }
     if (L.sleighDone(santa.dir, santa.t)) {
       santa.phase = 'idle';
-      santa.next = setup.santaEvery * rand(0.8, 1.2);
+      const sec = route.sections[L.sectionOf(route, gran.row)];
+      santa.next = sec.santaEvery * rand(0.8, 1.2);
     }
   }
 }
@@ -274,8 +340,9 @@ function updateSanta(dt) {
 function update(dt) {
   time += dt;
   L.stepLanes(lanes, dt);
-  for (const lane of lanes) {
-    if (lane.stops) {
+  for (let r = Math.max(0, Math.floor(cam)); r < Math.min(lanes.length, cam + 16); r++) {
+    const lane = lanes[r];
+    if (lane.kind === 'van') {
       const singing = L.laneTarget(lane) === 0;
       if (singing && !lane.wasSinging) Sound.sing();
       lane.wasSinging = singing;
@@ -284,19 +351,26 @@ function update(dt) {
   updateSnow(dt);
   updateParticles(dt);
   if (banner) { banner.t += dt; if (banner.t > BANNER_TIME) banner = null; }
+  if (bumpT > 0) bumpT = Math.max(0, bumpT - dt);
 
+  if (state === 'playing' || state === 'dying') walkTime += dt;
   if (state === 'playing') {
     cold -= dt;
     if (nog > 0) nog = Math.max(0, nog - dt);
     if (gran.hop < 1) {
       gran.hop += dt / HOP_TIME;
-      if (gran.hop >= 1) { gran.hop = 1; gran.fromX = gran.x; gran.fromRow = gran.row; landed(); }
+      if (gran.hop >= 1) { gran.hop = 1; gran.fromX = gran.x; gran.fromRow = gran.row; gran.bouncing = false; landed(); }
     }
     if (state === 'playing' && gran.hop >= 1 && queued) { const d = queued; queued = null; hop(d); }
     if (state === 'playing') checkGround(dt);
     if (state === 'playing' && cold <= 0) loseLife('freeze');
+    if (gran.spinT > 0) gran.spinT = Math.max(0, gran.spinT - dt);
     updateColdBar();
+    updateProgress();
   }
+  // The camera glides forward to keep up with her, and never goes back on its own.
+  const target = camFor(gran.row);
+  if (target > cam) cam += (target - cam) * Math.min(1, dt * 5);
   updateSanta(dt);
   if (state === 'dying') {
     death.t += dt;
@@ -308,7 +382,7 @@ function update(dt) {
   }
   if (state === 'home') {
     homeT += dt;
-    if (homeT >= HOME_TIME) nextRound();
+    if (homeT >= HOME_TIME) showWin();
   }
 }
 
@@ -317,10 +391,13 @@ function checkGround(dt) {
   const lane = lanes[row];
   const x = currentX();
   if (L.HAZARD_TYPES.has(lane.type)) {
+    if (gran.bouncing || invincible) return;
     const o = L.hazardAt(lane, x);
     if (o) {
-      if (lane.kind === 'car' || lane.kind === 'van' || lane.kind === 'plow') Sound.honk();
-      loseLife('squash', lane.kind);
+      const vehicle = lane.kind === 'car' || lane.kind === 'van' || lane.kind === 'plow';
+      if (vehicle) Sound.honk();
+      if (L.hitKind(o, lane.dir, x) === 'front') loseLife('squash', lane.kind);
+      else bounceOff(lane);
     }
   } else if (lane.type === 'pond' && gran.hop >= 1) {
     const f = L.floeUnder(lane, gran.x, time);
@@ -333,9 +410,28 @@ function checkGround(dt) {
   }
 }
 
+// She walked into the side or back of something: she bounces back to where she stepped from,
+// twirling the way it was going. No harm done.
+function bounceOff(lane) {
+  const h = Math.min(1, gran.hop);
+  let backX = gran.prevX;
+  if (route.rows[gran.prevRow].type === 'pond' && gran.prevFloe) backX = gran.prevFloe.o.x + gran.prevFloe.off;
+  // reverse the step from exactly where she is (the easing is symmetric, so 1 - h picks up seamlessly)
+  gran.fromX = gran.x; gran.fromRow = gran.row;
+  gran.x = backX; gran.row = gran.prevRow;
+  gran.hop = 1 - h;
+  gran.bouncing = true;
+  gran.spinT = SPIN_TIME;
+  gran.spinDir = lane.dir;
+  queued = null;
+  Sound.boing();
+  const animal = ['bunny', 'deer', 'moose', 'fox'].includes(lane.kind);
+  floater(currentX() * T, rowTop(gran.fromRow) - 4, animal ? 'Boop!' : 'Bonk!', '#ffffff', 22);
+}
+
 // ---- Effects ----
 function floater(x, y, text, color, size = 20, delay = 0) {
-  floaters.push({ x: Math.min(W - 70, Math.max(70, x)), y, text, color, size, t: -delay });
+  floaters.push({ x: clamp(x, 80, W - 80), y, text, color, size, t: -delay });
 }
 function sparkle(x, y, c) {
   for (let i = 0; i < 14; i++) {
@@ -350,9 +446,10 @@ function updateParticles(dt) {
   floaters = floaters.filter((f) => f.t < 1.4);
 }
 
+// Snow falls in screen space, so it doesn't scroll with the walk.
 function makeSnow(n) {
   snow = [];
-  for (let i = 0; i < n; i++) {
+  for (let i = 0; i < Math.min(n, 280); i++) {
     const z = Math.random();
     snow.push({ x: Math.random() * W, y: Math.random() * H, z, r: 0.8 + z * 2.4, sway: Math.random() * 6 });
   }
@@ -368,24 +465,83 @@ function updateSnow(dt) {
 
 // ---- Drawing ----
 let scale = 1, dpr = 1;
-let bg = null, grain = null;
+let warm = [];                 // sprites still to draw ahead of time
+let grain = null, sky = null;
+// The ground lives in a ring of RING row-sized slots on one canvas. Row r always uses slot r % RING, so
+// as she walks on, new rows are painted into the slots of rows that have scrolled away, a frame or two
+// before they're needed, and each frame copies at most two runs of slots to the screen, pixel for pixel.
+// (Drawing ~17 separate scaled row pictures every frame halved the frame rate on slow phones.)
+const RING = 32;
+let ring = null;
+const ringRow = new Array(RING).fill(-1);       // which row each slot holds
+const slotOf = (row) => ((row % RING) + RING) % RING;
+const rowPx = () => Math.round(T * scale * dpr);
+
+function resetRing() { ring = null; ringRow.fill(-1); }
+
+function paintRow(row) {
+  if (!ring) {
+    ring = document.createElement('canvas');
+    ring.width = Math.round(W * scale * dpr);
+    ring.height = RING * rowPx();
+  }
+  const slot = slotOf(row);
+  const g = ring.getContext('2d');
+  const k = scale * dpr;
+  g.setTransform(1, 0, 0, 1, 0, (RING - 1 - slot) * rowPx());
+  g.clearRect(0, 0, ring.width, rowPx());
+  g.scale(k, k);
+  g.save();
+  g.beginPath(); g.rect(0, 0, W, T); g.clip();
+  g.lineJoin = 'round'; g.lineCap = 'round';
+  const def = route.rows[row];
+  Art.drawRow(g, def, 0, W, route.rows[row + 1]?.type ?? 'sky', route.rows[row - 1]?.type ?? 'none', row + 1);
+  g.restore();
+  ringRow[slot] = row;
+}
+const hasRow = (row) => ringRow[slotOf(row)] === row;
+
+function drawGround(lo, hi) {
+  for (let r = lo; r <= hi; r++) if (!hasRow(r)) paintRow(r);
+  // get one upcoming row ready each frame
+  for (let r = hi + 1; r <= Math.min(route.homeRow, lo + RING - 1); r++) if (!hasRow(r)) { paintRow(r); break; }
+  const px = rowPx();
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  let top = hi;
+  while (top >= lo) {
+    // a run of rows whose slots sit next to each other (it breaks where the ring wraps round)
+    let bottom = top;
+    while (bottom - 1 >= lo && slotOf(bottom - 1) === slotOf(bottom) - 1) bottom--;
+    const sy = (RING - 1 - slotOf(top)) * px;
+    const dy = Math.round((rowTop(top) + H + cam * T) * scale * dpr);
+    const h = (top - bottom + 1) * px;
+    ctx.drawImage(ring, 0, sy, ring.width, h, 0, dy, ring.width, h);
+    top = bottom - 1;
+  }
+  ctx.restore();
+}
 
 function resize() {
   const r = stageEl.getBoundingClientRect();
   scale = Math.min((r.width - 16) / W, (r.height - 4) / H);
   dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+  // round so a row is a whole number of pixels, which keeps the ground copy pixel-exact
+  scale = Math.max(1, Math.floor(T * scale * dpr)) / (T * dpr);
   canvas.style.width = `${Math.floor(W * scale)}px`;
   canvas.style.height = `${Math.floor(H * scale)}px`;
   canvas.width = Math.floor(W * scale * dpr);
   canvas.height = Math.floor(H * scale * dpr);
   Art.setScale(scale * dpr);
-  buildBackground();
-  grain = offscreen((g) => Art.drawGrain(g, W, H));
+  resetRing();
+  warm = Art.warmTasks();
+  grain = offscreen(W, H, (g) => Art.drawGrain(g, W, H));
+  sky = offscreen(W, SKY, (g) => Art.drawSkyBand(g, W, SKY, 1));
 }
 
-function offscreen(draw) {
+function offscreen(w, h, draw) {
   const c = document.createElement('canvas');
-  c.width = canvas.width; c.height = canvas.height;
+  c.width = Math.ceil(w * scale * dpr); c.height = Math.ceil(h * scale * dpr);
   const g = c.getContext('2d');
   g.scale(scale * dpr, scale * dpr);
   g.lineJoin = 'round'; g.lineCap = 'round';
@@ -393,53 +549,82 @@ function offscreen(draw) {
   return c;
 }
 
-function buildBackground() {
-  if (!canvas.width) return;
-  bg = offscreen((g) => {
-    Art.drawSkyBand(g, W, TOP, setup.stage + 1);
-    for (let row = 0; row < L.ROWS; row++) {
-      const type = stage.rows[row].type;
-      const above = row + 1 < L.ROWS ? stage.rows[row + 1].type : 'sky';
-      const below = row > 0 ? stage.rows[row - 1].type : 'none';
-      Art.drawRow(g, type, rowTop(row), W, above, below, setup.stage * 100 + row + 1);
-    }
-  });
+function visibleRows() {
+  const lo = Math.max(0, Math.floor(cam) - 1);
+  const hi = Math.min(route.homeRow, Math.ceil(cam + H / T) + 1);
+  return [lo, hi];
 }
 
 function draw() {
+  const t0 = performance.now();
+  while (warm.length && performance.now() - t0 < 4) warm.shift()();
   Art.setTime(time);
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  if (bg) ctx.drawImage(bg, 0, 0);
+  const [lo, hi] = visibleRows();
+
   ctx.setTransform(scale * dpr, 0, 0, scale * dpr, 0, 0);
-  Art.cottage(ctx, W / 2, TOP - 2, time);
+  ctx.translate(0, H + cam * T);
+  const shake = bumpT > 0 ? Math.sin(bumpT * 90) * 2 : 0;
 
-  // Santa's warning shadow sits on the ground under everything.
-  drawSantaShadow();
+  drawGround(lo, hi);
 
-  // Pickups.
+  // The sky and cottage, beyond her yard.
+  const skyY = rowTop(route.homeRow) - SKY;
+  if (skyY + SKY + cam * T + H > 0) {
+    ctx.drawImage(sky, 0, skyY, W, SKY);
+    Art.cottage(ctx, W / 2, rowTop(route.homeRow) - 2, time);
+  }
+
+  drawSantaWarning();
+
   for (const p of pickups) {
-    if (p.got) continue;
+    if (p.got || p.row < lo || p.row > hi) continue;
     const bob = Math.sin(time * 3 + p.col) * 2;
     Art.blit(ctx, Art.pickup(p.kind), p.col * T, rowTop(p.row) + bob);
   }
 
-  // Rows from the top down, so things lower on the screen overlap those above.
-  const gRow = state === 'dying' || (state === 'over' && death) ? -1 : currentRow();
-  for (let row = L.ROWS - 1; row >= 0; row--) {
+  // Things standing in the rows, from the top down, so lower things overlap higher ones.
+  const gRow = state === 'dying' || state === 'won' || ((state === 'over') && death) ? -1 : currentRow();
+  for (let row = hi; row >= lo; row--) {
+    const def = route.rows[row];
+    if (def.blocked) for (const col of def.blocked) Art.blit(ctx, Art.tree((col + row) % 3), col * T, rowTop(row) - Art.RISE);
+    if (def.type === 'checkpoint' || def.type === 'start') {
+      Art.blit(ctx, Art.lamppost(), 0, rowTop(row) - Art.RISE);
+      Art.blit(ctx, Art.lamppost(), W - 24, rowTop(row) - Art.RISE);
+    }
     drawLane(lanes[row]);
-    if (row === gRow) drawGrandma();
+    if (row === gRow) drawGrandma(shake);
     if (death && death.row === row) drawDeath();
   }
 
+  drawSantaNose();
   drawSleigh();
 
-  // Effects.
   for (const p of particles) {
     ctx.globalAlpha = Math.max(0, 1 - p.t / p.life);
     if (p.star) { Art.star(ctx, p.x, p.y, p.r * 1.4, 4); ctx.fillStyle = p.c; ctx.fill(); }
     else { Art.circ(ctx, p.x, p.y, p.r); ctx.fillStyle = p.c; ctx.fill(); }
   }
   ctx.globalAlpha = 1;
+  drawFloaters();
+
+  // Screen-space layers: the dark beyond the next stretch of road, falling snow, paper grain, banners.
+  ctx.setTransform(scale * dpr, 0, 0, scale * dpr, 0, 0);
+  const ahead = clamp((camMax() - cam) / 2, 0, 1);
+  if (ahead > 0) {
+    const fog = ctx.createLinearGradient(0, 0, 0, 120);
+    fog.addColorStop(0, `rgba(20,27,63,${0.85 * ahead})`);
+    fog.addColorStop(1, 'rgba(20,27,63,0)');
+    ctx.fillStyle = fog;
+    ctx.fillRect(0, 0, W, 120);
+  }
+  drawSnow();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  if (grain) ctx.drawImage(grain, 0, 0);
+  ctx.setTransform(scale * dpr, 0, 0, scale * dpr, 0, 0);
+  drawBanner();
+}
+
+function drawSnow() {
   ctx.strokeStyle = '#ffffff';
   ctx.fillStyle = '#ffffff';
   ctx.lineWidth = 1.3;
@@ -460,12 +645,6 @@ function draw() {
     }
   }
   ctx.globalAlpha = 1;
-
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  if (grain) ctx.drawImage(grain, 0, 0);
-  ctx.setTransform(scale * dpr, 0, 0, scale * dpr, 0, 0);
-
-  drawText();
 }
 
 function drawLane(lane) {
@@ -474,10 +653,12 @@ function drawLane(lane) {
   for (const o of lane.objs) {
     if (o.x > L.COLS + 0.5 || o.x + o.w < -0.5) continue;
     const x = o.x * T;
+    const k = lane.kind;
     // a little bounce: cars on their springs, sleds over bumps
-    const bounce = lane.kind === 'floe' ? 0 : Math.abs(Math.sin(time * (lane.kind === 'sled' ? 9 : 6) + o.phase * 3)) * (lane.kind === 'sled' ? 2.5 : 1.2) * lane.moving;
+    const bouncy = { car: 1.2, plow: 1.2, van: 1.2, sled: 2.5, skater: 1, fox: 1.5, deer: 2, moose: 1 }[k] ?? 0;
+    const bounce = Math.abs(Math.sin(time * (k === 'sled' ? 9 : 6) + o.phase * 3)) * bouncy * lane.moving;
     const y = rowTop(lane.row) - bounce;
-    if (lane.kind === 'floe') {
+    if (k === 'floe') {
       const st = L.floeState(o, time);
       ctx.save();
       if (st === 'sunk') ctx.globalAlpha = 0.18;
@@ -486,8 +667,9 @@ function drawLane(lane) {
       ctx.restore();
       continue;
     }
-    if (lane.kind === 'car') Art.blit(ctx, Art.car(o.variant), x, y, flip);
-    else if (lane.kind === 'plow') {
+    const going = lane.moving > 0.4;
+    if (k === 'car') Art.blit(ctx, Art.car(o.variant), x, y, flip);
+    else if (k === 'plow') {
       Art.blit(ctx, Art.plow(), x, y, flip);
       // spinning beacon and slush spray off the blade
       const bx = flip ? x + o.w * T - 113 : x + 113;
@@ -496,43 +678,47 @@ function drawLane(lane) {
         const fx = flip ? x : x + o.w * T;
         particles.push({ x: fx, y: y + rand(30, 50), vx: lane.dir * rand(1, 3), vy: rand(-2.5, -0.5), life: rand(0.3, 0.6), t: 0, c: '#e8eef8', r: rand(1.5, 3.5) });
       }
-    } else if (lane.kind === 'van') {
+    } else if (k === 'van') {
       Art.blit(ctx, Art.van(o.variant), x, y, flip);
       if (lane.moving < 0.3) {
         for (let i = 0; i < 2; i++) {
-          const k = (time * 0.6 + i * 0.5) % 1;
-          ctx.globalAlpha = 1 - k;
+          const n = (time * 0.6 + i * 0.5) % 1;
+          ctx.globalAlpha = 1 - n;
           ctx.fillStyle = '#fff6d0';
           ctx.font = '700 20px Gaegu, sans-serif';
-          ctx.fillText(i ? '♫' : '♪', x + o.w * T * (0.3 + i * 0.3) + Math.sin(k * 6) * 4, y + 6 - k * 26);
+          ctx.fillText(i ? '♫' : '♪', x + o.w * T * (0.3 + i * 0.3) + Math.sin(n * 6) * 4, y + 6 - n * 26);
         }
         ctx.globalAlpha = 1;
       }
-    } else if (lane.kind === 'sled') Art.blit(ctx, Art.sled(o.variant), x, y, flip);
-    else if (lane.kind === 'skater') Art.blit(ctx, Art.skater(o.variant, Math.floor(time * 3 + o.phase) % 2), x, y, flip);
+    } else if (k === 'sled') Art.blit(ctx, Art.sled(o.variant), x, y, flip);
+    else if (k === 'skater') Art.blit(ctx, Art.skater(o.variant, Math.floor(time * 3 + o.phase) % 2), x, y, flip);
+    else if (k === 'bunny') Art.blit(ctx, Art.bunny(going ? 1 : 0), x, y - (going ? Math.abs(Math.sin(time * 18)) * 4 : 0), flip);
+    else if (k === 'deer') Art.blit(ctx, Art.deer(going ? Math.floor(time * 10) % 2 : 0), x, y, flip);
+    else if (k === 'fox') Art.blit(ctx, Art.fox(going ? Math.floor(time * 7 + o.phase) % 2 : 0), x, y, flip);
+    else if (k === 'moose') Art.blit(ctx, Art.moose(Math.floor(time * 2.5 + o.phase) % 2), x, y, flip);
   }
 }
 
-function drawGrandma() {
-  const x = currentX() * T;
+function drawGrandma(shake = 0) {
+  const x = currentX() * T + shake;
   const y = rowFeet(gran.fromRow) + (rowFeet(gran.row) - rowFeet(gran.fromRow)) * ease(Math.min(1, gran.hop));
   let tilt = nog > 0 ? Math.sin(time * 5) * 0.12 : 0;
   const shiver = state === 'playing' && cold < 8 ? 2.5 : 0;
   if (state === 'home') {
     // she toddles up the path and in through the door
-    const k = Math.min(1, homeT / 1.2);
+    const k = Math.min(1, homeT / 1.3);
     const hx = x + (W / 2 - x) * k;
-    const hy = y - 30 * k;
+    const hy = y - 34 * k;
     if (k < 1) Art.grandma(ctx, hx, hy, { facing: 'up', hop: (homeT * 3) % 1, step: Math.floor(homeT * 3) % 2 ? 1 : -1, scale: GRAN_SCALE * (1 - 0.25 * k) });
     return;
   }
-  // on a thin floe that's cracking? wobble
   const lane = lanes[gran.row];
   if (lane.type === 'pond' && gran.hop >= 1) {
     const f = L.floeUnder(lane, gran.x, time);
     if (f && L.floeState(f, time) === 'cracking') tilt += Math.sin(time * 30) * 0.06;
   }
-  Art.grandma(ctx, x, y, { facing: gran.facing, hop: gran.hop < 1 ? gran.hop : 0, step: gran.step, tilt, shiver, scale: GRAN_SCALE });
+  const turn = gran.spinT > 0 ? gran.spinDir * Math.PI * 2 * (1 - (gran.spinT / SPIN_TIME) ** 2) : 0;
+  Art.grandma(ctx, x, y, { facing: gran.facing, hop: gran.hop < 1 ? gran.hop : 0, step: gran.step, tilt, shiver, scale: GRAN_SCALE, spin: turn });
 }
 
 function drawDeath() {
@@ -549,52 +735,64 @@ function drawDeath() {
   ctx.restore();
 }
 
-function drawSantaShadow() {
+// The warning: a red glow at the edge of the row the sleigh will come from, getting brighter and
+// spreading into the row (it's the lead reindeer's nose, just out of sight). During the swoop, the nose
+// lights up the row ahead of the sleigh.
+function drawSantaWarning() {
   if (santa.phase === 'idle') return;
-  const y = rowTop(santa.row) + T / 2;
+  const top = rowTop(santa.row), mid = top + T / 2;
+  const dir = santa.dir;
   ctx.save();
   if (santa.phase === 'warn') {
     const k = santa.t / L.SANTA_WARN;
-    // the shadow grows in from the side the sleigh will come from
-    const len = W * (0.25 + 0.75 * k);
-    const x0 = santa.dir > 0 ? 0 : W - len;
-    const gr = ctx.createLinearGradient(x0, 0, x0 + len, 0);
-    const a = 0.25 + 0.4 * k;
-    // the whole row darkens a little, pulsing with the bells
-    ctx.fillStyle = `rgba(15,15,45,${0.08 + 0.08 * Math.sin(time * 14) ** 2})`;
-    ctx.fillRect(0, rowTop(santa.row), W, T);
-    if (santa.dir > 0) { gr.addColorStop(0, `rgba(15,15,45,${a})`); gr.addColorStop(1, 'rgba(15,15,45,0)'); }
-    else { gr.addColorStop(0, 'rgba(15,15,45,0)'); gr.addColorStop(1, `rgba(15,15,45,${a})`); }
+    const blink = 0.75 + 0.25 * Math.sin(time * 16);
+    const edge = dir > 0 ? 0 : W;
+    const reach = W * (0.3 + 0.7 * k);
+    const gr = ctx.createLinearGradient(edge, 0, edge + dir * reach, 0);
+    gr.addColorStop(0, `rgba(255,50,40,${(0.22 + 0.33 * k) * blink})`);
+    gr.addColorStop(1, 'rgba(255,50,40,0)');
     ctx.fillStyle = gr;
-    Art.ell(ctx, x0 + len / 2, y + 6, len / 2, 12 + 12 * k);
-    ctx.fill();
-    // a jingling bell at the edge it comes from
-    const bx = santa.dir > 0 ? 22 : W - 22;
-    const swing = Math.sin(time * 26) * 0.4;
-    ctx.translate(bx, y - 8);
-    ctx.rotate(swing);
-    Art.glow(ctx, 0, 6, 26, 'rgba(255,215,120,0.8)', 0.5 + 0.5 * Math.sin(time * 14));
-    Art.circ(ctx, 0, 8, 10); Art.paint(ctx, '#e8b54e', Art.INK, 2);
-    ctx.fillStyle = Art.INK; ctx.fillRect(-6, 9, 12, 2);
-    Art.circ(ctx, 0, 14, 2.5); ctx.fill();
-    Art.circ(ctx, 0, -3, 3); Art.paint(ctx, null, Art.INK, 2);
+    ctx.fillRect(Math.min(edge, edge + dir * reach), top, reach, T);
   } else {
-    const sx = L.sleighX(santa.dir, santa.t) * T;
-    ctx.fillStyle = 'rgba(15,15,45,0.4)';
-    Art.ell(ctx, sx + (L.SLEIGH_W * T) / 2, y + 8, (L.SLEIGH_W * T) / 2, 12);
+    const sx = L.sleighX(dir, santa.t) * T;
+    ctx.fillStyle = 'rgba(15,15,45,0.2)';
+    Art.ell(ctx, sx + (L.SLEIGH_W * T) / 2, mid + 8, (L.SLEIGH_W * T) / 2, 10);
     ctx.fill();
+    const nx = sleighNoseX(sx);
+    const gr = ctx.createLinearGradient(nx, 0, nx + dir * 220, 0);
+    gr.addColorStop(0, 'rgba(255,50,40,0.4)');
+    gr.addColorStop(1, 'rgba(255,50,40,0)');
+    ctx.fillStyle = gr;
+    ctx.fillRect(Math.min(nx, nx + dir * 220), top, 220, T);
   }
   ctx.restore();
 }
+// The nose itself, peeking in at the edge of the row, drawn above the trees and everything else.
+function drawSantaNose() {
+  if (santa.phase !== 'warn') return;
+  const k = santa.t / L.SANTA_WARN;
+  const blink = 0.7 + 0.3 * Math.sin(time * 16);
+  const nx = (santa.dir > 0 ? 0 : W) + santa.dir * (-4 + 18 * k);
+  const ny = rowTop(santa.row) + T / 2 - 8;
+  Art.glow(ctx, nx, ny, 46 + 50 * k, 'rgba(255,40,30,1)', blink);
+  Art.glow(ctx, nx, ny, 22 + 10 * k, 'rgba(255,40,30,1)', blink);
+  const r = 6 + 3 * k;
+  Art.circ(ctx, nx, ny, r); Art.paint(ctx, '#ff2a1f', Art.INK, 2);
+  Art.circ(ctx, nx - r * 0.3, ny - r * 0.35, r * 0.35); Art.paint(ctx, `rgba(255,225,215,${blink})`, null);
+}
+const sleighNoseX = (sx) => (santa.dir > 0 ? sx + Art.SLEIGH_NOSE.x : sx + L.SLEIGH_W * T - Art.SLEIGH_NOSE.x);
 
 function drawSleigh() {
   if (santa.phase !== 'swoop') return;
   const sx = L.sleighX(santa.dir, santa.t) * T;
   const y = rowTop(santa.row) - 22 + Math.sin(santa.t * 12) * 3;
   Art.blit(ctx, Art.sleigh(Math.floor(santa.t * 10) % 2), sx, y, santa.dir < 0);
+  const nx = sleighNoseX(sx), ny = y + Art.SLEIGH_NOSE.y;
+  Art.glow(ctx, nx, ny, 38, 'rgba(255,60,40,0.9)', 0.9);
+  Art.glow(ctx, nx, ny, 9, 'rgba(255,230,210,1)', 1);
 }
 
-function drawText() {
+function drawFloaters() {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   for (const f of floaters) {
@@ -610,23 +808,27 @@ function drawText() {
     ctx.fillText(f.text, f.x, y);
   }
   ctx.globalAlpha = 1;
-  if (banner) {
-    const k = banner.t / BANNER_TIME;
-    const a = Math.min(1, banner.t * 4, (1 - k) * 4);
-    ctx.globalAlpha = a;
-    const y = H * 0.46;
-    ctx.fillStyle = 'rgba(25,30,70,0.6)';
-    Art.rr(ctx, W / 2 - 170, y - 50, 340, 100, 22); ctx.fill();
-    ctx.font = '700 46px "Mountains of Christmas", serif';
-    ctx.fillStyle = '#fff6d8';
-    ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(30,30,70,0.9)';
-    ctx.strokeText(banner.text, W / 2, y - 14);
-    ctx.fillText(banner.text, W / 2, y - 14);
-    ctx.font = '700 28px Gaegu, sans-serif';
-    ctx.fillStyle = '#ffd27a';
-    ctx.fillText(banner.sub, W / 2, y + 26);
-    ctx.globalAlpha = 1;
-  }
+}
+
+function drawBanner() {
+  if (!banner) return;
+  const k = banner.t / BANNER_TIME;
+  ctx.globalAlpha = Math.min(1, banner.t * 4, (1 - k) * 4);
+  const y = H * 0.4;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = '700 40px "Mountains of Christmas", serif';
+  const wBox = Math.min(W - 30, Math.max(300, ctx.measureText(banner.text).width + 60));
+  ctx.fillStyle = 'rgba(25,30,70,0.6)';
+  Art.rr(ctx, W / 2 - wBox / 2, y - 50, wBox, 100, 22); ctx.fill();
+  ctx.fillStyle = '#fff6d8';
+  ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(30,30,70,0.9)';
+  ctx.strokeText(banner.text, W / 2, y - 14);
+  ctx.fillText(banner.text, W / 2, y - 14);
+  ctx.font = '700 28px Gaegu, sans-serif';
+  ctx.fillStyle = '#ffd27a';
+  ctx.fillText(banner.sub, W / 2, y + 26);
+  ctx.globalAlpha = 1;
 }
 
 // ---- HUD ----
@@ -635,7 +837,7 @@ let headUrl = null;
 function updateHud() {
   $('score').textContent = score;
   $('best').textContent = Math.max(best, score);
-  $('round').textContent = round + 1;
+  $('night').textContent = night + 1;
   if (!headUrl) headUrl = Art.headIcon(26);
   const want = Math.max(0, lives);
   if (livesEl.childElementCount !== want) {
@@ -647,10 +849,30 @@ function updateHud() {
 }
 const coldFill = $('cold-fill');
 function updateColdBar() {
-  const k = Math.max(0, cold / setup.coldTime);
+  const k = Math.max(0, cold / section().coldTime);
   coldFill.style.transform = `scaleX(${k})`;
   coldFill.classList.toggle('low', k < 0.25);
   $('nog').classList.toggle('hidden', nog <= 0);
+}
+
+// The progress bar: a dot for each checkpoint, the house at the end, and Grandma moving along.
+const progEl = $('progress');
+const progGran = $('prog-gran');
+function buildProgress() {
+  progEl.querySelectorAll('.cp').forEach((n) => n.remove());
+  route.sections.forEach((s, i) => {
+    if (!i) return;
+    const dot = document.createElement('span');
+    dot.className = 'cp';
+    dot.style.left = `${(100 * s.startRow) / route.homeRow}%`;
+    dot.title = s.checkpoint;
+    progEl.appendChild(dot);
+  });
+  updateProgress();
+}
+function updateProgress() {
+  progGran.style.left = `${(100 * gran.row) / route.homeRow}%`;
+  progEl.querySelectorAll('.cp').forEach((n, i) => n.classList.toggle('done', i + 1 <= reached));
 }
 
 // ---- Input ----
@@ -663,12 +885,15 @@ window.addEventListener('keydown', (e) => {
   if (dir) {
     e.preventDefault();
     Sound.unlock();
-    if (state === 'title' || state === 'over') return;
     tryMove(dir);
   } else if ((e.key === 'Enter' || e.key === ' ') && (state === 'title' || state === 'over')) {
     e.preventDefault();
     Sound.unlock();
     newGame();
+  } else if ((e.key === 'Enter' || e.key === ' ') && state === 'won') {
+    e.preventDefault();
+    Sound.unlock();
+    nextNight();
   }
 });
 
@@ -691,7 +916,7 @@ stageEl.addEventListener('pointerup', (e) => {
     // a tap: which way is it from Grandma?
     const r = canvas.getBoundingClientRect();
     const gx = r.left + currentX() * T * scale;
-    const gy = r.top + (rowFeet(currentRow()) - 20) * scale;
+    const gy = r.top + (rowFeet(currentRow()) - 20 + H + cam * T) * scale;
     const tx = e.clientX - gx, ty = e.clientY - gy;
     if (Math.hypot(tx, ty) < 10) return;
     dir = Math.abs(tx) > Math.abs(ty) ? (tx > 0 ? 'right' : 'left') : (ty > 0 ? 'down' : 'up');
@@ -699,11 +924,14 @@ stageEl.addEventListener('pointerup', (e) => {
   tryMove(dir);
 });
 stageEl.addEventListener('pointercancel', () => { touch = null; });
-document.addEventListener('touchmove', (e) => { if (state !== 'title' && state !== 'over') e.preventDefault(); }, { passive: false });
+document.addEventListener('touchmove', (e) => { if (state !== 'title' && state !== 'over' && state !== 'won') e.preventDefault(); }, { passive: false });
 
-$('start-btn').addEventListener('click', () => { Sound.unlock(); newGame(); });
-$('again-btn').addEventListener('click', () => { Sound.unlock(); newGame(); });
-$('restart-btn').addEventListener('click', () => { Sound.unlock(); newGame(); });
+const go = (fn) => () => { Sound.unlock(); fn(); };
+$('start-btn').addEventListener('click', go(newGame));
+$('again-btn').addEventListener('click', go(newGame));
+$('restart-btn').addEventListener('click', go(newGame));
+$('next-btn').addEventListener('click', go(nextNight));
+$('fresh-btn').addEventListener('click', go(newGame));
 const muteBtn = $('mute-btn');
 const showMute = () => { muteBtn.textContent = Sound.muted ? '🔇' : '🔊'; muteBtn.setAttribute('aria-label', Sound.muted ? 'Sound off' : 'Sound on'); };
 muteBtn.addEventListener('click', () => { Sound.unlock(); Sound.toggleMute(); showMute(); });
@@ -724,21 +952,26 @@ function frame(now) {
 
 new ResizeObserver(resize).observe(stageEl);
 resize();
-lanes = L.buildLanes(stage, 1);
-makeSnow(setup.snow);
+makeSnow(90);
 updateHud();
-updateColdBar();
+buildProgress();
 requestAnimationFrame(frame);
-if (document.fonts) document.fonts.ready.then(() => { headUrl = null; livesEl.replaceChildren(); updateHud(); });
+// The row pictures include handwritten names, so redraw them once the font has arrived.
+if (document.fonts) document.fonts.ready.then(() => { headUrl = null; livesEl.replaceChildren(); resetRing(); updateHud(); });
 
 // Test hooks, only with ?debug in the address.
 if (DEBUG) {
   window.ggrobar = {
-    stats: () => ({ state, round, score, lives, cold: +cold.toFixed(1), row: gran.row, x: +gran.x.toFixed(2), santa: santa.phase, stage: stage.name }),
+    stats: () => ({
+      state, night, score, lives, cold: +cold.toFixed(1), row: gran.row, x: +gran.x.toFixed(2), cam: +cam.toFixed(2),
+      reached, section: route.sections[L.sectionOf(route, gran.row)].name, homeRow: route.homeRow, santa: santa.phase,
+    }),
+    route: () => route.rows.map((r) => r.type),
+    lane: (row) => ({ dir: lanes[row].dir, kind: lanes[row].kind, objs: lanes[row].objs.map((o) => ({ x: o.x, w: o.w })) }),
     start: newGame,
     move: tryMove,
-    setRound(r) { round = r; startRound(); setState('playing'); updateHud(); },
-    warp(row, x = gran.x) { Object.assign(gran, { row, fromRow: row, x, fromX: x, hop: 1 }); },
+    nextNight,
+    warp(row, x = 4.5) { Object.assign(gran, { row, fromRow: row, x, fromX: x, prevRow: row, prevX: x, hop: 1 }); cam = camFor(row); maxRow = Math.max(maxRow, row); },
     santa(row, dir = 1) { santa = { phase: 'warn', t: 0, row, dir, next: 0 }; Sound.sleighBells(); },
     santaSwoop(t = 0.4) { santa.phase = 'swoop'; santa.t = t; },
     invincible(on = true) { invincible = on; },
