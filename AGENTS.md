@@ -16,6 +16,11 @@ and a regularly swooping sleigh. Built for a parent and their kids; keep it appr
 - Scrolling: world coordinates, row r spans y = -(r+1)·T..-r·T. `cam` is the row at the bottom of the 910-unit view;
   it glides forward to keep her `GRAN_FROM_BOTTOM` rows up and never moves back except on respawn. She can't step
   below the screen. The sky + cottage sit above the yard, and `camMax` stops the camera with them filling the top.
+- Neighborhood (first section, "Holly Lane"): `lawn` rows have `deco: 'S..B.T...'` (snowman / lit bush / little tree,
+  blocking like trees, drawn by `Art.yardDeco`); `sidewalk` rows have `ebike`, `carolers` (stop to sing) and `dogwalker`
+  (stops to sniff). The user felt crossing lots of roads didn't fit walking through a neighborhood, so roads there are
+  just one street at the top. Sections with `presentsEvery` drop presents near her (`pickDropSpot`): shadow + red ring
+  for `DROP_WARN` s, then it lands and squashes her if she's on that tile.
 - Forest: `forest` rows have `trees: 'T..TT.T.T'` (blocking tiles, drawn as tall still sprites); `trail` rows have
   animals. Animal personalities are lane-wide stop/go cycles (`stops`, `KIND_ACCEL`) so spacing stays even.
   `routeIsWalkable` (BFS) and the gap tests in `tests/logic.test.mjs` guard against impossible layouts.
@@ -26,7 +31,9 @@ and a regularly swooping sleigh. Built for a parent and their kids; keep it appr
   rows near Grandma (`pickSantaRow`), limited to rows on screen. Interval comes from each section's `santaEvery`.
 - Hits: `hitKind` decides head-on (the mover's front has only just reached her → splat) vs side (she stepped into
   its side/back → `bounceOff`: she reverses her step from exactly where she is and twirls the way it was going,
-  no life lost). A still Grandma is always reached front-first (tested, even for the fastest deer). The sleigh
+  no life lost), and after the twirl she stumbles one more row back (`stumbleDir`, slower `STUMBLE_TIME` step, input
+  ignored meanwhile; no second stumble if she bounces mid-stumble). The user asked for this to make bounces cost
+  something. A still Grandma is always reached front-first (tested, even for the fastest deer). The sleigh
   always splats.
 - Art: hand-drawn storybook style drawn with canvas calls. Every shape goes through `sketchy()` in art.js, a
   Proxy over the 2D context that records path commands and redraws them as wobbly lines (fill and outline
@@ -42,6 +49,8 @@ and a regularly swooping sleigh. Built for a parent and their kids; keep it appr
   frame after load. Sleigh bells were trimmed to ~22 audio nodes for the same reason.
 - Grandma toddles (`HOP_TIME` 0.17 s, eased, 4-unit lift, rocks side to side, alternating foot) at 0.8 scale
   with her feet 10 units above the lane's bottom so she sits in the lane like the vehicles.
+- Eggnog stacks: `nog` counts glasses, points ×(nog + 1), kept through checkpoints until she loses a life (reset each
+  night). `tipsy` seconds (`nogTime`, longer per glass) make forward steps drift sideways (`nogDrift`, higher per glass).
 - Fonts: Mountains of Christmas (titles) and Gaegu (handwritten UI and in-game text) from Google Fonts.
 - `?debug` exposes `window.ggrobar` (see README). Screenshots/play tests were done with Playwright from
   `~/workspace/projects/witches-brew/node_modules`; there's no Playwright dependency here.
@@ -51,4 +60,4 @@ and a regularly swooping sleigh. Built for a parent and their kids; keep it appr
   module with a new one (e.g. old `stages.js` without `SECTIONS`), which stops the game loading: a blank board.
   index.html also shows a "reload" card if the game hasn't started 4 s after load.
 - Ideas for later: leaderboard (same Supabase pattern as Witch's Brew; a fixed-length walk suits it), the kids'
-  own drawings, more sections, a "cocoa" extra life, raccoons in town.
+  own drawings, more sections, a "cocoa" extra life, raccoons in the neighborhood.

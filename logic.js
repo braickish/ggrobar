@@ -9,11 +9,12 @@ export const LOOP = COLS + 2 * MARGIN;          // how far a mover travels befor
 export const KIND_W = {
   car: 1.5, plow: 2.6, van: 2.2, sled: 1.1, skater: 0.9,
   bunny: 0.7, deer: 1.4, moose: 2.2, fox: 1.1,
+  ebike: 1.2, carolers: 2.0, dogwalker: 1.8,
 };
 // How quickly a lane gets going again after a stop (bunnies hop off at once, vans pull away slowly).
-export const KIND_ACCEL = { van: 2.5, bunny: 14, deer: 9, fox: 5 };
-export const HAZARD_TYPES = new Set(['road', 'hill', 'rink', 'trail']);
-export const SAFE_TYPES = new Set(['walk', 'forest', 'checkpoint', 'start', 'yard']);
+export const KIND_ACCEL = { van: 2.5, bunny: 14, deer: 9, fox: 5, carolers: 3, dogwalker: 4 };
+export const HAZARD_TYPES = new Set(['road', 'hill', 'rink', 'trail', 'sidewalk']);
+export const SAFE_TYPES = new Set(['walk', 'forest', 'lawn', 'checkpoint', 'start', 'yard']);
 
 export const GRANDMA_HALF = 0.28;              // half of Grandma's width, for being hit
 export const SLEIGH_W = 4.6;                   // reindeer plus sleigh
@@ -28,8 +29,16 @@ export const LIFE_PTS = 100;                   // per life left when she gets ho
 export const PICKUP_PTS = 25;
 export const SET_BONUS = 150;                  // glasses + fruitcake + present in one section
 export const COLD_PTS = 3;                     // per second left on the cold meter
-export const NOG_TIME = 5;
-export const NOG_DRIFT = 0.35;                 // chance each forward hop wobbles sideways
+// Eggnog: each glass adds one to the points multiplier (×2, ×3, ×4…), kept until she loses a life.
+// It also makes her tipsy for a while, longer with every glass, and tipsier.
+export const NOG_TIME = 12;                    // seconds of wobble from the first glass
+export const NOG_TIME_EACH = 6;                // ...and this much more for every glass after it
+export const nogTime = (glasses) => NOG_TIME + NOG_TIME_EACH * (glasses - 1);
+export const nogDrift = (glasses) => Math.min(0.55, 0.22 + 0.08 * glasses);   // chance a forward step wobbles sideways
+
+// Presents falling out of the sky (the neighborhood): a shadow grows for DROP_WARN seconds, then it lands.
+export const DROP_WARN = 1.3;
+export const DROP_SIT = 0.8;                    // it sits there a moment before it pops
 
 // A small seeded random number generator, so a layout can be repeated.
 export function rng(seed = 1) {
@@ -61,16 +70,18 @@ export function buildRoute(sections, night = 0) {
       endRow: rows.length - 1,
       coldTime: Math.round(sec.rows.length * 2.6 + 10),
       santaEvery: Math.max(3.5, sec.santaEvery * (1 - 0.1 * night)),
+      presentsEvery: sec.presentsEvery ? Math.max(1.6, sec.presentsEvery * (1 - 0.1 * night)) : 0,
     });
   });
   rows.push({ type: 'yard', section: sections.length - 1 });
-  for (const r of rows) if (r.trees) r.blocked = treeCols(r.trees);
+  for (const r of rows) if (r.trees || r.deco) r.blocked = treeCols(r.trees ?? r.deco);
   return { rows, sections: info, homeRow: rows.length - 1 };
 }
 
+// Columns with something in the way: a tree in the woods, or a snowman, bush or Christmas tree in a front yard.
 export function treeCols(pattern) {
   const s = new Set();
-  [...pattern].forEach((ch, i) => { if (ch === 'T' || ch === 't') s.add(i); });
+  [...pattern].forEach((ch, i) => { if (ch !== '.' && ch !== ' ') s.add(i); });
   return s;
 }
 
@@ -236,4 +247,26 @@ export function routeIsWalkable(route) {
     }
   }
   return false;
+}
+
+// When she bounces off something she twirls, then stumbles back one more row: away from where she was
+// heading (back down if she was stepping sideways).
+export function stumbleDir(fromRow, toRow) {
+  return toRow < fromRow ? 'up' : 'down';
+}
+
+// Where to drop the next present: near Grandma (mostly just ahead of her), inside the section, on open
+// ground, and not where one is already falling. Returns { row, col } or null.
+export function pickDropSpot(route, section, gRow, gCol, taken = [], rand = Math.random) {
+  for (let tries = 0; tries < 12; tries++) {
+    const row = gRow + Math.floor(rand() * 4) - 1;            // one behind to two ahead
+    const col = Math.max(0, Math.min(COLS - 1, gCol + Math.floor(rand() * 5) - 2));
+    const def = route.rows[row];
+    if (!def || def.section !== section) continue;
+    if (def.type === 'start' || def.type === 'checkpoint' || def.type === 'yard') continue;
+    if (isBlocked(route, row, col)) continue;
+    if (taken.some((d) => d.row === row && d.col === col)) continue;
+    return { row, col };
+  }
+  return null;
 }

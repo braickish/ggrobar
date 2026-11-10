@@ -25,7 +25,7 @@ test('the walk is a sensible length (about 3–4 minutes for a good player)', ()
 test('moving rows are fully described', () => {
   const kinds = {
     road: ['car', 'plow', 'van'], hill: ['sled'], rink: ['skater'], pond: ['floe'],
-    trail: ['bunny', 'deer', 'moose', 'fox'],
+    trail: ['bunny', 'deer', 'moose', 'fox'], sidewalk: ['ebike', 'carolers', 'dogwalker'],
   };
   for (const [i, r] of route.rows.entries()) {
     if (L.SAFE_TYPES.has(r.type)) { assert.equal(r.kind, undefined, `row ${i}`); continue; }
@@ -55,9 +55,14 @@ test('tree rows are 9 columns, always leave a way through, and the whole walk ca
   assert.equal(L.routeIsWalkable(walled), false);
 });
 
-test('trees only grow on forest rows, never where Grandma starts again', () => {
+test('trees only grow on forest rows and yard things only sit on lawns, never where Grandma starts again', () => {
   route.rows.forEach((r, i) => {
     if (r.trees) assert.equal(r.type, 'forest', `row ${i}`);
+    if (r.deco) {
+      assert.equal(r.type, 'lawn', `row ${i}`);
+      assert.match(r.deco, /^[SBT.]{9}$/, `row ${i}`);
+      assert.ok(r.blocked.size < L.COLS, `row ${i}`);
+    }
   });
   for (const s of route.sections) assert.ok(!L.isBlocked(route, s.startRow, 4));
 });
@@ -92,7 +97,7 @@ test('movers keep their spacing as they loop round, even the stop-and-go animals
 
 test('stop-and-go lanes really stop and go', () => {
   const lanes = L.buildLanes(route.rows, L.rng(3));
-  for (const kind of ['van', 'bunny', 'deer', 'fox']) {
+  for (const kind of ['van', 'bunny', 'deer', 'fox', 'carolers', 'dogwalker']) {
     const lane = lanes.find((l) => l.kind === kind);
     let stopped = 0, moved = 0;
     for (let i = 0; i < 900; i++) {
@@ -188,4 +193,42 @@ test('pickup spots and scoring helpers', () => {
   assert.equal(L.snapCol(3.9), 3.5);
   assert.equal(L.snapCol(-0.4), 0.5);
   assert.equal(L.snapCol(9.6), 8.5);
+});
+
+test('the first section is a neighborhood: mostly sidewalks and yards, one street to cross', () => {
+  const town = SECTIONS[0];
+  const roads = town.rows.filter((r) => r.type === 'road').length;
+  const walks = town.rows.filter((r) => r.type === 'sidewalk').length;
+  assert.ok(roads <= 2, `${roads} road rows`);
+  assert.ok(walks >= 8, `${walks} sidewalk rows`);
+  assert.ok(town.presentsEvery > 0);
+});
+
+test('eggnog stacks: each glass wobbles longer and a bit more, within reason', () => {
+  assert.ok(L.nogTime(2) > L.nogTime(1) && L.nogTime(3) > L.nogTime(2));
+  assert.ok(L.nogTime(1) >= 10);
+  assert.ok(L.nogDrift(1) < L.nogDrift(3));
+  assert.ok(L.nogDrift(20) <= 0.55);
+});
+
+test('after a bounce she stumbles away from where she was going', () => {
+  assert.equal(L.stumbleDir(5, 6), 'down');      // stepping forward → staggers back
+  assert.equal(L.stumbleDir(5, 4), 'up');        // stepping back → staggers forward
+  assert.equal(L.stumbleDir(5, 5), 'down');      // stepping sideways → staggers back
+});
+
+test('presents only drop near Grandma, in her section, on open ground', () => {
+  const rand = L.rng(11);
+  const s0 = route.sections[0];
+  for (let i = 0; i < 500; i++) {
+    const gRow = s0.startRow + 1 + Math.floor(rand() * (s0.endRow - s0.startRow - 1));
+    const gCol = Math.floor(rand() * L.COLS);
+    const spot = L.pickDropSpot(route, 0, gRow, gCol, [], rand);
+    if (!spot) continue;
+    assert.equal(route.rows[spot.row].section, 0);
+    assert.notEqual(route.rows[spot.row].type, 'start');
+    assert.ok(!L.isBlocked(route, spot.row, spot.col));
+    assert.ok(Math.abs(spot.row - gRow) <= 2 && Math.abs(spot.col - gCol) <= 2);
+  }
+  assert.equal(route.sections[1].presentsEvery, 0, 'only the neighborhood has falling presents');
 });

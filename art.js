@@ -590,6 +590,184 @@ function reindeer(g, x, y, frame, k, lead = false) {
   g.restore();
 }
 
+// ---- The neighborhood (drawn facing right) ----
+// A kid on an e-bike in a Santa hat, pom-pom streaming behind.
+export function ebike(variant) {
+  const w = 1.2 * TILE;
+  return sprite(`ebike${variant}`, w, TILE, 34, (g) => {
+    const coat = KID_COATS[variant % 4];
+    ell(g, w / 2, 54, w / 2 - 2, 3.5); paint(g, 'rgba(20,24,50,0.28)', null);
+    // headlight beam
+    g.save();
+    const beam = g.createLinearGradient(w - 6, 0, w + 34, 0);
+    beam.addColorStop(0, 'rgba(255,240,180,0.5)'); beam.addColorStop(1, 'rgba(255,240,180,0)');
+    g.fillStyle = beam;
+    g.beginPath(); g.moveTo(w - 8, 30); g.lineTo(w + 34, 22); g.lineTo(w + 34, 44); g.lineTo(w - 8, 34); g.fill();
+    g.restore();
+    // wheels and frame
+    for (const x of [14, 58]) {
+      circ(g, x, 45, 9.5); paint(g, null, INK, 3);
+      circ(g, x, 45, 2); paint(g, '#a9b2cc', INK, 1);
+    }
+    g.strokeStyle = '#2e9a8c'; g.lineWidth = 3.5;
+    g.beginPath(); g.moveTo(14, 45); g.lineTo(28, 30); g.lineTo(52, 30); g.lineTo(58, 45); g.moveTo(28, 30); g.lineTo(34, 45); g.lineTo(52, 30); g.stroke();
+    g.beginPath(); g.moveTo(52, 30); g.lineTo(54, 18); g.stroke();
+    g.strokeStyle = INK; g.lineWidth = 3; g.beginPath(); g.moveTo(50, 18); g.lineTo(58, 17); g.stroke();
+    rr(g, 30, 32, 16, 7, 2); paint(g, '#3a3f5e', INK, 1.4);                    // battery
+    circ(g, 41, 35.5, 1.2); paint(g, '#7cf09a', null);
+    ell(g, 59, 22, 2.5, 3); paint(g, '#fff3c4', INK, 1.1);                     // lamp
+    rr(g, 20, 25, 12, 4, 2); paint(g, '#3a3550', INK, 1.3);                     // seat
+    // kid
+    g.strokeStyle = '#3a3550'; g.lineWidth = 4.5;
+    g.beginPath(); g.moveTo(26, 24); g.lineTo(36, 34); g.lineTo(34, 44); g.stroke();
+    g.beginPath(); g.moveTo(22, 4); g.quadraticCurveTo(20, 16, 26, 25); g.lineTo(34, 24); g.quadraticCurveTo(34, 12, 30, 4); g.closePath();
+    paint(g, coat);
+    g.strokeStyle = coat; g.lineWidth = 4; g.beginPath(); g.moveTo(30, 9); g.lineTo(50, 17); g.stroke();
+    circ(g, 51, 17, 2.6); paint(g, '#3a3550', INK, 1);
+    circ(g, 30, -3, 8); paint(g, C.skin, INK, 1.5);
+    circ(g, 34, -4, 1.3); paint(g, INK, null);
+    circ(g, 33, 0, 2); paint(g, 'rgba(240,120,120,0.55)', null);
+    // Santa hat flopping back in the wind
+    g.beginPath(); g.moveTo(22, -6); g.quadraticCurveTo(26, -16, 36, -9); g.quadraticCurveTo(24, -14, 10, -10); g.closePath();
+    paint(g, C.red, INK, 1.5);
+    rr(g, 21, -9, 17, 4.5, 2); paint(g, '#fff', INK, 1.2);
+    circ(g, 9, -10, 3.5); paint(g, '#fff', INK, 1.2);
+    // speed lines
+    g.strokeStyle = 'rgba(255,255,255,0.7)'; g.lineWidth = 1.5;
+    for (const y of [20, 30, 40]) { g.beginPath(); g.moveTo(-14, y); g.lineTo(-4, y); g.stroke(); }
+  });
+}
+
+// Three carolers in a row with songbooks. frame swings their legs.
+const CAROL_COATS = [['#c9443c', '#2f7a55'], ['#2f7a55', '#e8b54e'], ['#5577bf', '#c9443c'], ['#8a5a9e', '#e8b54e']];
+export function carolers(variant, frame = 0) {
+  const w = 2.0 * TILE;
+  return sprite(`carolers${variant}-${frame}`, w, TILE, 30, (g) => {
+    ell(g, w / 2, 54, w / 2 - 4, 3.5); paint(g, 'rgba(20,24,50,0.28)', null);
+    for (let i = 0; i < 3; i++) {
+      const [coat, scarf] = CAROL_COATS[(variant + i) % 4];
+      const x = 22 + i * 38, tall = i === 1 ? 4 : 0;
+      const sw = (frame + i) % 2 ? 4 : -4;
+      g.strokeStyle = '#3a3550'; g.lineWidth = 4;
+      g.beginPath(); g.moveTo(x - 4, 40); g.lineTo(x - 4 + sw, 53); g.moveTo(x + 4, 40); g.lineTo(x + 4 - sw, 53); g.stroke();
+      // long coat
+      g.beginPath(); g.moveTo(x - 13, 44); g.quadraticCurveTo(x - 12, 18 - tall, x, 16 - tall); g.quadraticCurveTo(x + 12, 18 - tall, x + 13, 44); g.closePath();
+      paint(g, vgrad(g, 16, 44, coat, coat));
+      // songbook
+      rr(g, x + 2, 24 - tall, 14, 10, 1.5); paint(g, '#fff6d8', INK, 1.3);
+      g.strokeStyle = INK; g.lineWidth = 1; g.beginPath(); g.moveTo(x + 9, 24 - tall); g.lineTo(x + 9, 34 - tall); g.stroke();
+      circ(g, x + 3, 30 - tall, 3); paint(g, C.skin, INK, 1);
+      // scarf, head, singing mouth
+      rr(g, x - 9, 14 - tall, 18, 5, 2.5); paint(g, scarf, INK, 1.2);
+      circ(g, x, 6 - tall, 8.5); paint(g, C.skin, INK, 1.5);
+      circ(g, x + 3, 4 - tall, 1.2); paint(g, INK, null);
+      ell(g, x + 4, 9 - tall, 1.8, 2.4); paint(g, '#7a2a2a', null);
+      if (i === 1) { // top hat
+        rr(g, x - 9, -4 - tall, 18, 3.5, 1.5); paint(g, '#2b2a48', INK, 1.2);
+        rr(g, x - 6, -15 - tall, 12, 12, 1.5); paint(g, '#2b2a48', INK, 1.2);
+        g.fillStyle = C.red; g.fillRect(x - 6, -7 - tall, 12, 3);
+      } else { // bobble hat
+        g.beginPath(); g.moveTo(x - 9, 3 - tall); g.quadraticCurveTo(x, -10 - tall, x + 9, 3 - tall); g.closePath(); paint(g, scarf, INK, 1.3);
+        circ(g, x, -7 - tall, 3.2); paint(g, '#fff', INK, 1.1);
+      }
+    }
+  });
+}
+
+// Someone walking a dog in a sweater. The dog leads the way. frame swings legs.
+export function dogwalker(variant, frame = 0) {
+  const w = 1.8 * TILE;
+  return sprite(`dogwalker${variant}-${frame}`, w, TILE, 30, (g) => {
+    const coat = ['#5577bf', '#3f948e', '#d24b42', '#8a5a9e'][variant % 4];
+    const sweater = ['#c9443c', '#2f7a55', '#e8b54e', '#3e7fc1'][variant % 4];
+    const fur = ['#b9814a', '#f1ece2', '#3a3238', '#d9a25c'][variant % 4];
+    ell(g, w / 2, 54, w / 2 - 4, 3.5); paint(g, 'rgba(20,24,50,0.28)', null);
+    const sw = frame ? 4 : -4;
+    // person
+    g.strokeStyle = '#3a3550'; g.lineWidth = 4.5;
+    g.beginPath(); g.moveTo(18, 38); g.lineTo(18 + sw, 53); g.moveTo(26, 38); g.lineTo(26 - sw, 53); g.stroke();
+    g.beginPath(); g.moveTo(9, 42); g.quadraticCurveTo(10, 12, 22, 10); g.quadraticCurveTo(34, 12, 35, 42); g.closePath();
+    paint(g, vgrad(g, 10, 42, coat, coat));
+    g.strokeStyle = coat; g.lineWidth = 5; g.beginPath(); g.moveTo(30, 18); g.lineTo(40, 28); g.stroke();
+    circ(g, 41, 29, 3); paint(g, '#3a3550', INK, 1);
+    circ(g, 22, 0, 9); paint(g, C.skin, INK, 1.5);
+    circ(g, 26, -1, 1.3); paint(g, INK, null);
+    g.beginPath(); g.moveTo(14, -2); g.quadraticCurveTo(22, -16, 30, -2); g.closePath(); paint(g, sweater, INK, 1.4);
+    for (const ex of [13, 31]) { circ(g, ex, 1, 3.6); paint(g, '#fff', INK, 1.1); }   // earmuffs
+    // leash
+    g.strokeStyle = C.red; g.lineWidth = 1.8;
+    g.beginPath(); g.moveTo(42, 29); g.quadraticCurveTo(58, 42, 74, 30); g.stroke();
+    // dog
+    const legs = frame ? [[66, 4], [72, -4], [88, 4], [94, -4]] : [[66, -4], [72, 4], [88, -4], [94, 4]];
+    g.strokeStyle = '#3a2a28'; g.lineWidth = 3.5;
+    for (const [x0, d] of legs) { g.beginPath(); g.moveTo(x0, 40); g.lineTo(x0 + d, 53); g.stroke(); }
+    g.strokeStyle = fur; g.lineWidth = 3; g.beginPath(); g.moveTo(62, 34); g.quadraticCurveTo(54, 30, 56, 22); g.stroke();   // waggy tail
+    ell(g, 80, 37, 18, 8); paint(g, fur);
+    g.beginPath(); g.moveTo(70, 30); g.lineTo(90, 30); g.lineTo(92, 44); g.lineTo(68, 44); g.closePath(); paint(g, sweater, INK, 1.5);
+    g.strokeStyle = '#fff'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(70, 37); g.lineTo(91, 37); g.stroke();
+    ell(g, 100, 28, 9, 7.5); paint(g, fur);
+    ell(g, 108, 31, 4.5, 3.5); paint(g, fur, INK, 1.3);
+    circ(g, 112, 30, 1.8); paint(g, INK, null);
+    circ(g, 102, 25, 1.3); paint(g, INK, null);
+    ell(g, 96, 29, 3.5, 7, 0.3); paint(g, '#5a4030', INK, 1.3);              // floppy ear
+  });
+}
+
+// Front-yard things that are in the way, like trees in the woods: S snowman, B bush with lights,
+// T a little Christmas tree. Same box as a tree (it's drawn RISE higher).
+export function yardDeco(kind, variant = 0) {
+  return sprite(`deco-${kind}${variant}`, TILE, TILE + RISE, 6, (g) => {
+    g.translate(0, RISE);
+    ell(g, 30, 53, 22, 6); paint(g, 'rgba(60,80,130,0.25)', null);
+    if (kind === 'S') {
+      circ(g, 30, 38, 15); paint(g, vgrad(g, 23, 53, '#ffffff', C.snowShade), INK, 1.8);
+      circ(g, 30, 16, 11); paint(g, vgrad(g, 5, 27, '#ffffff', C.snowShade), INK, 1.8);
+      rr(g, 19, 22, 22, 5, 2.5); paint(g, ['#c9443c', '#2f7a55', '#5577bf'][variant % 3], INK, 1.3);
+      g.beginPath(); g.moveTo(34, 25); g.lineTo(38, 36); g.lineTo(33, 35); g.closePath(); paint(g, ['#c9443c', '#2f7a55', '#5577bf'][variant % 3], INK, 1.1);
+      g.fillStyle = INK; for (const y of [33, 41]) { circ(g, 30, y, 1.8); g.fill(); }
+      for (const ex of [26, 34]) { circ(g, ex, 13, 1.6); g.fill(); }
+      g.beginPath(); g.moveTo(30, 16); g.lineTo(39, 18); g.lineTo(30, 19); g.closePath(); paint(g, '#f08a3a', INK, 1);
+      g.strokeStyle = '#6e452b'; g.lineWidth = 2.2;
+      g.beginPath(); g.moveTo(16, 34); g.lineTo(4, 24); g.moveTo(8, 27); g.lineTo(5, 31); g.moveTo(44, 34); g.lineTo(56, 26); g.stroke();
+      rr(g, 20, 3, 20, 3.5, 1.5); paint(g, '#2b2a48', INK, 1.2);         // top hat
+      rr(g, 23, -9, 14, 13, 1.5); paint(g, '#2b2a48', INK, 1.2);
+    } else if (kind === 'B') {
+      blob(g, [[6, 50], [4, 34], [14, 20], [30, 14], [46, 20], [56, 34], [54, 50], [30, 54]]);
+      paint(g, vgrad(g, 14, 54, '#3a7d5a', '#285c44'));
+      snowCap(g, 10, 50, 20, 6, variant + 2);
+      const r = seeded(variant + 9);
+      for (let i = 0; i < 9; i++) {
+        const bx = 10 + r() * 40, by = 26 + r() * 22;
+        glow(g, bx, by, 7, BULBS[i % 4], 0.6);
+        circ(g, bx, by, 2.4); paint(g, BULBS[i % 4], INK, 0.8);
+      }
+    } else {
+      g.fillStyle = '#7a4a2a'; g.fillRect(27, 44, 6, 9);
+      rr(g, 20, 46, 20, 8, 2); paint(g, C.red, INK, 1.3);                  // pot
+      pine(g, 30, 46, 0.95);
+      for (const [bx, by, c] of [[22, 30, '#ff6a5a'], [36, 26, '#ffd25a'], [28, 14, '#6ab4ff'], [40, 38, '#6ad08a'], [20, 40, '#ffd25a']]) {
+        circ(g, bx, by, 2.8); paint(g, c, INK, 0.8);
+      }
+      star(g, 30, -14, 6); paint(g, C.gold, INK, 1.2);
+    }
+  }, true);
+}
+
+// A present falling out of the sky (no glow, unlike the ones to pick up).
+const WRAP = [['#d9473c', C.gold], ['#3f948e', '#f6f0e0'], ['#5577bf', '#ffd25a'], ['#e0a640', '#c9443c']];
+export function fallingPresent(variant) {
+  return sprite(`drop${variant}`, TILE, TILE, 8, (g) => {
+    const [box, ribbon] = WRAP[variant % 4];
+    rr(g, 12, 22, 36, 28, 3); paint(g, vgrad(g, 22, 50, box, box));
+    rr(g, 9, 15, 42, 10, 3); paint(g, box);
+    g.fillStyle = ribbon; g.fillRect(27, 15, 6, 35);
+    g.strokeStyle = INK; g.lineWidth = 1.2; g.strokeRect(27, 15, 6, 35);
+    ell(g, 22, 11, 7, 4.5, -0.4); paint(g, ribbon, INK, 1.5);
+    ell(g, 38, 11, 7, 4.5, 0.4); paint(g, ribbon, INK, 1.5);
+    circ(g, 30, 13, 3); paint(g, ribbon, INK, 1.2);
+  });
+}
+
 // ---- Scenery sprites ----
 // A snowy pine standing in one tile. It's taller than the tile, so its picture is RISE units taller
 // and is drawn that much higher (kept tight, because there can be thirty trees on screen).
@@ -1075,6 +1253,39 @@ export function drawRow(g, def, y, W, above, below, seed) {
       ell(g, x, yy, 1.8, 2.6); g.fill(); ell(g, x + 4, yy - 3, 1.8, 2.6); g.fill();
     }
     hatch(g, r, y, W, 2, 'rgba(140,160,205,0.4)');
+  } else if (type === 'lawn') {
+    // a neighbor's front yard: deep snow, a footpath, and warm light from the windows
+    g.fillStyle = vgrad(g, y, y + T, '#f4f7fd', '#dfe6f4'); g.fillRect(0, y, W, T);
+    for (let i = 0; i < 3; i++) glow(g, 40 + r() * (W - 80), y + 8, 90, 'rgba(255,200,110,0.22)');
+    g.fillStyle = 'rgba(255,255,255,0.85)';
+    for (let i = 0; i < 8; i++) { ell(g, r() * W, y + r() * T, 8 + r() * 12, 2 + r() * 2); g.fill(); }
+    // holly sprigs
+    for (let i = 0; i < 4; i++) {
+      const hx = r() * W, hy = y + 12 + r() * 36;
+      ell(g, hx - 3, hy, 4, 2, -0.5); paint(g, '#2f7a55', null);
+      ell(g, hx + 3, hy, 4, 2, 0.5); paint(g, '#2f7a55', null);
+      circ(g, hx, hy - 1, 1.6); paint(g, C.red, null);
+    }
+    hatch(g, r, y, W, 3, 'rgba(140,160,205,0.45)');
+  } else if (type === 'sidewalk') {
+    // shoveled paving slabs, one per column, with salt and a snowbank on each side
+    g.fillStyle = C.snow; g.fillRect(0, y, W, T);
+    g.fillStyle = vgrad(g, y, y + T, '#c3c8da', '#aab1c8'); g.fillRect(0, y + 6, W, T - 12);
+    g.strokeStyle = 'rgba(80,90,130,0.35)'; g.lineWidth = 1.5;
+    for (let x = T; x < W; x += T) { g.beginPath(); g.moveTo(x, y + 8); g.lineTo(x, y + T - 8); g.stroke(); }
+    g.fillStyle = 'rgba(255,255,255,0.55)';
+    for (let i = 0; i < 40; i++) { circ(g, r() * W, y + 10 + r() * (T - 20), 0.6 + r()); g.fill(); }
+    g.fillStyle = 'rgba(110,100,120,0.3)';
+    for (let x = 14 + r() * 30; x < W; x += 34 + r() * 20) {
+      const yy = y + 24 + r() * 12;
+      ell(g, x, yy, 2, 3); g.fill(); ell(g, x + 5, yy - 4, 2, 3); g.fill();
+    }
+    for (const [yy, up] of [[y + 6, true], [y + T - 6, false]]) {
+      g.beginPath(); g.moveTo(0, up ? y : y + T);
+      for (let x = 0; x <= W; x += 10) g.lineTo(x, yy + (up ? 1 : -1) * (r() * 4));
+      g.lineTo(W, up ? y : y + T); g.closePath();
+      g.fillStyle = C.snow; g.fill();
+    }
   } else if (type === 'walk' || type === 'yard') {
     g.fillStyle = vgrad(g, y, y + T, type === 'yard' ? '#f6f9ff' : C.snow, type === 'yard' ? '#e2e9f6' : '#dbe3f2');
     g.fillRect(0, y, W, T);
@@ -1194,6 +1405,7 @@ export function warmTasks() {
   const makers = [];
   for (let v = 0; v < 4; v++) makers.push(() => car(v), () => van(v), () => sled(v), () => skater(v, 0), () => skater(v, 1));
   makers.push(plow, () => sleigh(0), () => sleigh(1));
+  for (let v = 0; v < 4; v++) makers.push(() => ebike(v), () => carolers(v, 0), () => carolers(v, 1), () => dogwalker(v, 0), () => dogwalker(v, 1), () => fallingPresent(v));
   for (const f of [0, 1]) makers.push(() => bunny(f), () => fox(f), () => deer(f), () => moose(f));
   for (const k of ['glasses', 'fruitcake', 'present', 'eggnog']) makers.push(() => pickup(k));
   for (const size of [2, 3]) for (let v = 0; v < 3; v++) for (const thin of [false, true]) makers.push(() => floe(size, v, thin));
@@ -1201,6 +1413,7 @@ export function warmTasks() {
   const tasks = [];
   for (let v = 0; v < 3; v++) tasks.push(() => tree(v));
   tasks.push(lamppost, cottageSprite);
+  for (const k of ['S', 'B', 'T']) for (let v = 0; v < 3; v++) tasks.push(() => yardDeco(k, v));
   for (let f = 0; f < BOIL_FRAMES; f++) {
     for (const m of makers) tasks.push(() => { const keep = boil; boil = f; m(); boil = keep; });
   }

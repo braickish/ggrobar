@@ -1,7 +1,7 @@
-import { SECTIONS } from './stages.js?v=202611100714';
-import * as L from './logic.js?v=202611100714';
-import * as Art from './art.js?v=202611100714';
-import { Sound } from './sound.js?v=202611100714';
+import { SECTIONS } from './stages.js?v=202611102144';
+import * as L from './logic.js?v=202611102144';
+import * as Art from './art.js?v=202611102144';
+import { Sound } from './sound.js?v=202611102144';
 
 const T = Art.TILE;
 const W = L.COLS * T;                           // 540
@@ -9,6 +9,7 @@ const H = 910;                                  // the view is a bit over 15 row
 const SKY = 130;                                // the night sky and cottage above Grandma's yard
 const HOP_TIME = 0.17;                          // one toddling step
 const SPIN_TIME = 0.5;                          // the twirl when she bounces off something
+const STUMBLE_TIME = 0.34;                      // ...then a slow, wobbly step backwards
 const GRAN_SCALE = 0.8;
 const GRAN_FROM_BOTTOM = 3.5;                   // the camera keeps her about this many rows up the screen
 const DEATH_TIME = 1.7;
@@ -47,7 +48,10 @@ let score = 0;
 let best = load('ggrobar-best', 0);
 let lives = 3;
 let cold = 40;
-let nog = 0;
+let nog = 0;                  // glasses of eggnog since she last lost a life: points ×(nog + 1)
+let tipsy = 0;                // seconds of wobbling left
+let drops = [];               // presents falling out of the sky
+let dropNext = 3;
 let maxRow = 0;
 let pickups = [];
 let floaters = [];
@@ -63,6 +67,7 @@ const gran = {
   x: 4.5, row: 0, fromX: 4.5, fromRow: 0, hop: 1, facing: 'up', step: 1,
   prevX: 4.5, prevRow: 0, prevFloe: null,      // where this step started, to bounce back to
   bouncing: false, spinT: 0, spinDir: 1,
+  hopTime: HOP_TIME, stumble: null, stumbling: false,   // stumble: the way she'll stagger after a bounce
 };
 let queued = null;
 let santa = { phase: 'idle', next: 5, t: 0, row: 1, dir: 1 };
@@ -80,6 +85,7 @@ function newGame() {
 }
 
 function startNight() {
+  nog = 0;
   route = L.buildRoute(SECTIONS, night);
   lanes = L.buildLanes(route.rows);
   reached = 0;
@@ -99,10 +105,13 @@ function startNight() {
 // Back to the last checkpoint (or the party) after losing a life.
 function respawn() {
   const row = section().startRow;
-  Object.assign(gran, { x: 4.5, row, fromX: 4.5, fromRow: row, hop: 1, facing: 'up', bouncing: false, spinT: 0 });
+  Object.assign(gran, { x: 4.5, row, fromX: 4.5, fromRow: row, hop: 1, facing: 'up', bouncing: false, spinT: 0, hopTime: HOP_TIME, stumble: null, stumbling: false });
   queued = null;
   cold = section().coldTime;
   nog = 0;
+  tipsy = 0;
+  drops = [];
+  dropNext = 2.5;
   maxRow = Math.max(maxRow, row);
   death = null;
   cam = Math.min(cam, camFor(row));
@@ -128,6 +137,7 @@ function setState(s) {
 const HIT_WORDS = {
   car: 'Splat!', plow: 'Plowed!', van: 'Splat!', sled: 'Wheee… oof!', skater: 'Whoops!',
   bunny: 'Bunny bonk!', deer: 'Oh deer!', moose: 'Moose on the loose!', fox: 'Outfoxed!',
+  ebike: 'Ding ding… oof!', carolers: 'Fa-la-la-flat!', dogwalker: 'Tangled in the leash!', present: 'Special delivery!',
 };
 
 function loseLife(kind, by) {
@@ -176,7 +186,7 @@ function gameOver() {
 function reachCheckpoint(i) {
   reached = i;
   const pts = L.CHECKPOINT_PTS + L.coldBonus(cold);
-  addScore(pts, gran.x * T, rowTop(gran.row) - 6, `Checkpoint! +${pts * (nog > 0 ? 2 : 1)}`);
+  addScore(pts, gran.x * T, rowTop(gran.row) - 6, `Checkpoint! +${pts * mult()}`);
   cold = section().coldTime;
   Sound.allSet();
   banner = { text: section().checkpoint, sub: `Next: ${section().name}`, t: 0 };
@@ -185,7 +195,7 @@ function reachCheckpoint(i) {
 
 function reachHome() {
   const pts = L.HOME_PTS + L.coldBonus(cold) + lives * L.LIFE_PTS;
-  addScore(pts, gran.x * T, rowTop(route.homeRow) + 10, `Home! +${pts * (nog > 0 ? 2 : 1)}`);
+  addScore(pts, gran.x * T, rowTop(route.homeRow) + 10, `Home! +${pts * mult()}`);
   Sound.home();
   homeT = 0;
   setState('home');
@@ -213,10 +223,11 @@ function nextNight() {
 }
 
 // ---- Score ----
+const mult = () => nog + 1;
 function addScore(pts, x, y, text) {
-  const mult = nog > 0 ? 2 : 1;
-  score += pts * mult;
-  if (text !== null) floater(x, y, text ?? `+${pts * mult}`, mult > 1 ? '#ffe9a8' : '#ffffff', 20);
+  const m = mult();
+  score += pts * m;
+  if (text !== null) floater(x, y, text ?? `+${pts * m}`, m > 1 ? '#ffe9a8' : '#ffffff', 20);
   updateHud();
 }
 
@@ -226,39 +237,44 @@ const currentRow = () => (gran.hop < 0.5 ? gran.fromRow : gran.row);
 
 function tryMove(dir) {
   if (state !== 'playing') return;
+  if (gran.bouncing || gran.stumble || gran.stumbling) return;   // she's busy staggering
   if (gran.hop < 1) { queued = dir; return; }
   hop(dir);
 }
 
-function hop(dir) {
+// stumble: she's staggering backwards after bouncing off something (slower, no turning round)
+function hop(dir, stumble = false) {
   const fromRow = gran.row;
   let row = fromRow, x = gran.x;
   if (dir === 'up') row = Math.min(route.homeRow, row + 1);
   if (dir === 'down') row = Math.max(0, row - 1);
   if (dir === 'left') x -= 1;
   if (dir === 'right') x += 1;
-  gran.facing = dir;
+  if (!stumble) gran.facing = dir;
   // She can step back a little, but not off the bottom of the screen.
-  if (row < cam + 0.2) { bump(); return; }
+  if (row < cam + 0.2 || row === fromRow && dir !== 'left' && dir !== 'right') { bump(); return false; }
   const toPond = route.rows[row].type === 'pond';
   // Eggnog makes her wander a little on forward/back steps (but never into a tree).
-  if (nog > 0 && (dir === 'up' || dir === 'down') && Math.random() < L.NOG_DRIFT) {
+  if (!stumble && tipsy > 0 && (dir === 'up' || dir === 'down') && Math.random() < L.nogDrift(nog)) {
     const dx = Math.random() < 0.5 ? -1 : 1;
     const nx = toPond ? x + dx : L.snapCol(x + dx);
     if (toPond || !L.isBlocked(route, row, Math.floor(nx))) x = nx;
   }
   if (!toPond) x = L.snapCol(x);
   else if (route.rows[fromRow].type !== 'pond' && (dir === 'left' || dir === 'right')) x = clamp(x, 0.5, L.COLS - 0.5);
-  if (!toPond && L.isBlocked(route, row, Math.floor(x))) { bump(); return; }
-  if (row === fromRow && x === gran.x) return;
+  if (!toPond && L.isBlocked(route, row, Math.floor(x))) { bump(); return false; }
+  if (row === fromRow && x === gran.x) return false;
   gran.prevX = gran.x; gran.prevRow = fromRow;
   const floe = route.rows[fromRow].type === 'pond' ? L.floeUnder(lanes[fromRow], gran.x, time) : null;
   gran.prevFloe = floe ? { o: floe, off: gran.x - floe.x } : null;
   gran.fromX = gran.x; gran.fromRow = fromRow;
   gran.x = x; gran.row = row;
   gran.hop = 0;
+  gran.hopTime = stumble ? STUMBLE_TIME : HOP_TIME;
+  gran.stumbling = stumble;
   gran.step = -gran.step;
   Sound.hop();
+  return true;
 }
 
 // Walked into a tree (or the bottom of the screen): a little bump, no harm done.
@@ -280,16 +296,17 @@ function landed() {
     if (p.got || p.row !== row || p.col !== col) continue;
     p.got = true;
     if (p.kind === 'eggnog') {
-      nog = L.NOG_TIME;
+      nog++;
+      tipsy += L.nogTime(nog);
       Sound.nog();
-      floater(gran.x * T, rowTop(row) - 8, 'Eggnog! Double points', '#ffe9a8', 20);
+      floater(gran.x * T, rowTop(row) - 8, nog === 1 ? 'Eggnog! Double points' : `More eggnog! Points ×${mult()}`, '#ffe9a8', 20);
     } else {
       Sound.pickup();
-      addScore(L.PICKUP_PTS, gran.x * T, rowTop(row) - 8, `${NAMES[p.kind]} +${L.PICKUP_PTS * (nog > 0 ? 2 : 1)}`);
+      addScore(L.PICKUP_PTS, gran.x * T, rowTop(row) - 8, `${NAMES[p.kind]} +${L.PICKUP_PTS * mult()}`);
       const set = pickups.filter((q) => q.section === p.section && q.kind !== 'eggnog');
       if (set.every((q) => q.got)) {
         Sound.allSet();
-        addScore(L.SET_BONUS, gran.x * T, rowTop(row) - 50, `All set! +${L.SET_BONUS * (nog > 0 ? 2 : 1)}`);
+        addScore(L.SET_BONUS, gran.x * T, rowTop(row) - 50, `All set! +${L.SET_BONUS * mult()}`);
       }
     }
     sparkle((p.col + 0.5) * T, rowTop(row) + T / 2, '#ffe9a8');
@@ -342,7 +359,7 @@ function update(dt) {
   L.stepLanes(lanes, dt);
   for (let r = Math.max(0, Math.floor(cam)); r < Math.min(lanes.length, cam + 16); r++) {
     const lane = lanes[r];
-    if (lane.kind === 'van') {
+    if (lane.kind === 'van' || lane.kind === 'carolers') {
       const singing = L.laneTarget(lane) === 0;
       if (singing && !lane.wasSinging) Sound.sing();
       lane.wasSinging = singing;
@@ -356,12 +373,22 @@ function update(dt) {
   if (state === 'playing' || state === 'dying') walkTime += dt;
   if (state === 'playing') {
     cold -= dt;
-    if (nog > 0) nog = Math.max(0, nog - dt);
+    if (tipsy > 0) tipsy = Math.max(0, tipsy - dt);
     if (gran.hop < 1) {
-      gran.hop += dt / HOP_TIME;
-      if (gran.hop >= 1) { gran.hop = 1; gran.fromX = gran.x; gran.fromRow = gran.row; gran.bouncing = false; landed(); }
+      gran.hop += dt / gran.hopTime;
+      if (gran.hop >= 1) {
+        gran.hop = 1; gran.fromX = gran.x; gran.fromRow = gran.row; gran.bouncing = false; gran.stumbling = false; gran.hopTime = HOP_TIME;
+        landed();
+      }
+    }
+    // After a bounce she finishes her twirl, then staggers back one more row.
+    if (state === 'playing' && gran.hop >= 1 && gran.stumble && gran.spinT <= 0.05) {
+      const d = gran.stumble;
+      gran.stumble = null;
+      if (!hop(d, true)) gran.spinT = 0;
     }
     if (state === 'playing' && gran.hop >= 1 && queued) { const d = queued; queued = null; hop(d); }
+    if (state === 'playing') updateDrops(dt);
     if (state === 'playing') checkGround(dt);
     if (state === 'playing' && cold <= 0) loseLife('freeze');
     if (gran.spinT > 0) gran.spinT = Math.max(0, gran.spinT - dt);
@@ -414,6 +441,10 @@ function checkGround(dt) {
 // twirling the way it was going. No harm done.
 function bounceOff(lane) {
   const h = Math.min(1, gran.hop);
+  // she twirls and then stumbles one more row back (but not again if she bounced off something mid-stumble)
+  gran.stumble = gran.stumbling ? null : L.stumbleDir(gran.prevRow, gran.row);
+  gran.stumbling = false;
+  gran.hopTime = HOP_TIME;
   let backX = gran.prevX;
   if (route.rows[gran.prevRow].type === 'pond' && gran.prevFloe) backX = gran.prevFloe.o.x + gran.prevFloe.off;
   // reverse the step from exactly where she is (the easing is symmetric, so 1 - h picks up seamlessly)
@@ -425,8 +456,71 @@ function bounceOff(lane) {
   gran.spinDir = lane.dir;
   queued = null;
   Sound.boing();
-  const animal = ['bunny', 'deer', 'moose', 'fox'].includes(lane.kind);
+  const animal = ['bunny', 'deer', 'moose', 'fox', 'dogwalker'].includes(lane.kind);
   floater(currentX() * T, rowTop(gran.fromRow) - 4, animal ? 'Boop!' : 'Bonk!', '#ffffff', 22);
+}
+
+// ---- Presents falling out of the sky (sections with presentsEvery) ----
+function updateDrops(dt) {
+  const secIdx = L.sectionOf(route, gran.row);
+  const sec = route.sections[secIdx];
+  if (sec.presentsEvery) {
+    dropNext -= dt;
+    if (dropNext <= 0) {
+      dropNext = sec.presentsEvery * rand(0.7, 1.3);
+      const spot = L.pickDropSpot(route, secIdx, gran.row, Math.floor(gran.x), drops);
+      if (spot) { drops.push({ ...spot, t: 0, variant: Math.floor(Math.random() * 4), landed: false }); Sound.fall(); }
+    }
+  }
+  for (const d of drops) {
+    d.t += dt;
+    if (!d.landed && d.t >= L.DROP_WARN) {
+      d.landed = true;
+      Sound.thud();
+      const cx = (d.col + 0.5) * T, cy = rowTop(d.row) + T - 8;
+      for (let i = 0; i < 10; i++) particles.push({ x: cx + rand(-20, 20), y: cy, vx: rand(-2, 2), vy: rand(-2.5, -0.5), life: rand(0.3, 0.6), t: 0, c: '#ffffff', r: rand(1.5, 3.5) });
+      if (currentRow() === d.row && Math.abs(currentX() - (d.col + 0.5)) < 0.55) loseLife('squash', 'present');
+    }
+    if (d.landed && d.t >= L.DROP_WARN + L.DROP_SIT && !d.popped) {
+      d.popped = true;
+      sparkle((d.col + 0.5) * T, rowTop(d.row) + T / 2, WRAP_SPARK[d.variant]);
+    }
+  }
+  drops = drops.filter((d) => !d.popped);
+}
+const WRAP_SPARK = ['#ff6a5a', '#6ad08a', '#6ab4ff', '#ffd25a'];
+
+function drawDropShadows() {
+  for (const d of drops) {
+    const k = Math.min(1, d.t / L.DROP_WARN);
+    const cx = (d.col + 0.5) * T, cy = rowTop(d.row) + T - 10;
+    ctx.fillStyle = `rgba(30,30,70,${0.12 + 0.3 * k})`;
+    Art.ell(ctx, cx, cy, 6 + 18 * k, 2 + 5 * k);
+    ctx.fill();
+    if (!d.landed) {
+      // a ring that tightens onto the spot
+      ctx.strokeStyle = `rgba(255,90,70,${0.35 + 0.4 * k})`;
+      ctx.lineWidth = 2;
+      Art.ell(ctx, cx, cy, 30 - 8 * k, 10 - 2 * k);
+      ctx.stroke();
+    }
+  }
+}
+function drawDrops() {
+  for (const d of drops) {
+    const fall = 0.4;                                        // it comes into view for the last bit
+    const left = L.DROP_WARN - d.t;
+    let y = rowTop(d.row) - 4, sq = 1;
+    if (left > fall) continue;
+    if (left > 0) y -= (left / fall) ** 2 * 520;
+    else { const b = d.t - L.DROP_WARN; sq = 1 - 0.25 * Math.exp(-b * 9) * Math.cos(b * 30); }
+    const cx = d.col * T + T / 2;
+    ctx.save();
+    ctx.translate(cx, y + T); ctx.scale(1 / sq, sq); ctx.translate(-cx, -(y + T));
+    if (left > 0) { ctx.translate(cx, y + T / 2); ctx.rotate(left * 4); ctx.translate(-cx, -(y + T / 2)); }
+    Art.blit(ctx, Art.fallingPresent(d.variant), d.col * T, y);
+    ctx.restore();
+  }
 }
 
 // ---- Effects ----
@@ -575,6 +669,7 @@ function draw() {
   }
 
   drawSantaWarning();
+  drawDropShadows();
 
   for (const p of pickups) {
     if (p.got || p.row < lo || p.row > hi) continue;
@@ -586,7 +681,12 @@ function draw() {
   const gRow = state === 'dying' || state === 'won' || ((state === 'over') && death) ? -1 : currentRow();
   for (let row = hi; row >= lo; row--) {
     const def = route.rows[row];
-    if (def.blocked) for (const col of def.blocked) Art.blit(ctx, Art.tree((col + row) % 3), col * T, rowTop(row) - Art.RISE);
+    if (def.blocked) {
+      for (const col of def.blocked) {
+        const pic = def.deco ? Art.yardDeco(def.deco[col], (col + row) % 3) : Art.tree((col + row) % 3);
+        Art.blit(ctx, pic, col * T, rowTop(row) - Art.RISE);
+      }
+    }
     if (def.type === 'checkpoint' || def.type === 'start') {
       Art.blit(ctx, Art.lamppost(), 0, rowTop(row) - Art.RISE);
       Art.blit(ctx, Art.lamppost(), W - 24, rowTop(row) - Art.RISE);
@@ -596,6 +696,7 @@ function draw() {
     if (death && death.row === row) drawDeath();
   }
 
+  drawDrops();
   drawSantaNose();
   drawSleigh();
 
@@ -655,7 +756,7 @@ function drawLane(lane) {
     const x = o.x * T;
     const k = lane.kind;
     // a little bounce: cars on their springs, sleds over bumps
-    const bouncy = { car: 1.2, plow: 1.2, van: 1.2, sled: 2.5, skater: 1, fox: 1.5, deer: 2, moose: 1 }[k] ?? 0;
+    const bouncy = { car: 1.2, plow: 1.2, van: 1.2, sled: 2.5, skater: 1, fox: 1.5, deer: 2, moose: 1, ebike: 1.5, carolers: 1, dogwalker: 1 }[k] ?? 0;
     const bounce = Math.abs(Math.sin(time * (k === 'sled' ? 9 : 6) + o.phase * 3)) * bouncy * lane.moving;
     const y = rowTop(lane.row) - bounce;
     if (k === 'floe') {
@@ -680,17 +781,13 @@ function drawLane(lane) {
       }
     } else if (k === 'van') {
       Art.blit(ctx, Art.van(o.variant), x, y, flip);
-      if (lane.moving < 0.3) {
-        for (let i = 0; i < 2; i++) {
-          const n = (time * 0.6 + i * 0.5) % 1;
-          ctx.globalAlpha = 1 - n;
-          ctx.fillStyle = '#fff6d0';
-          ctx.font = '700 20px Gaegu, sans-serif';
-          ctx.fillText(i ? '♫' : '♪', x + o.w * T * (0.3 + i * 0.3) + Math.sin(n * 6) * 4, y + 6 - n * 26);
-        }
-        ctx.globalAlpha = 1;
-      }
-    } else if (k === 'sled') Art.blit(ctx, Art.sled(o.variant), x, y, flip);
+      if (lane.moving < 0.3) singingNotes(x, y, o.w);
+    } else if (k === 'carolers') {
+      Art.blit(ctx, Art.carolers(o.variant, going ? Math.floor(time * 4 + o.phase) % 2 : 0), x, y, flip);
+      if (lane.moving < 0.3) singingNotes(x, y, o.w);
+    } else if (k === 'ebike') Art.blit(ctx, Art.ebike(o.variant), x, y, flip);
+    else if (k === 'dogwalker') Art.blit(ctx, Art.dogwalker(o.variant, going ? Math.floor(time * 5 + o.phase) % 2 : 0), x, y, flip);
+    else if (k === 'sled') Art.blit(ctx, Art.sled(o.variant), x, y, flip);
     else if (k === 'skater') Art.blit(ctx, Art.skater(o.variant, Math.floor(time * 3 + o.phase) % 2), x, y, flip);
     else if (k === 'bunny') Art.blit(ctx, Art.bunny(going ? 1 : 0), x, y - (going ? Math.abs(Math.sin(time * 18)) * 4 : 0), flip);
     else if (k === 'deer') Art.blit(ctx, Art.deer(going ? Math.floor(time * 10) % 2 : 0), x, y, flip);
@@ -699,10 +796,24 @@ function drawLane(lane) {
   }
 }
 
+function singingNotes(x, y, w) {
+  ctx.fillStyle = '#fff6d0';
+  ctx.font = '700 20px Gaegu, sans-serif';
+  for (let i = 0; i < 2; i++) {
+    const n = (time * 0.6 + i * 0.5) % 1;
+    ctx.globalAlpha = 1 - n;
+    ctx.fillText(i ? '♫' : '♪', x + w * T * (0.3 + i * 0.3) + Math.sin(n * 6) * 4, y + 6 - n * 26);
+  }
+  ctx.globalAlpha = 1;
+}
+
 function drawGrandma(shake = 0) {
   const x = currentX() * T + shake;
   const y = rowFeet(gran.fromRow) + (rowFeet(gran.row) - rowFeet(gran.fromRow)) * ease(Math.min(1, gran.hop));
-  let tilt = nog > 0 ? Math.sin(time * 5) * 0.12 : 0;
+  let tilt = tipsy > 0 ? Math.sin(time * 5) * Math.min(0.22, 0.08 + 0.04 * nog) : 0;
+  // staggering backwards: lean back and wobble
+  if (gran.stumbling) tilt += Math.sin(Math.PI * gran.hop) * 0.35 * (gran.step > 0 ? 1 : -1);
+  else if (gran.stumble) tilt += Math.sin(time * 22) * 0.08;
   const shiver = state === 'playing' && cold < 8 ? 2.5 : 0;
   if (state === 'home') {
     // she toddles up the path and in through the door
@@ -725,7 +836,10 @@ function drawDeath() {
   const x = death.x * T, y = rowFeet(death.row);
   ctx.save();
   ctx.translate(x, y); ctx.scale(0.95, 0.95); ctx.translate(-x, -y);
-  if (death.kind === 'squash') Art.pancake(ctx, x, y, death.t, death.by);
+  if (death.kind === 'squash') {
+    Art.pancake(ctx, x, y, death.t, death.by);
+    if (death.by === 'present') Art.blit(ctx, Art.fallingPresent(0), x - T / 2, y - T + 4);
+  }
   else if (death.kind === 'splash') {
     if (death.t < 0.3) {
       for (let i = 0; i < 3; i++) particles.push({ x: x + rand(-14, 14), y: y - 10, vx: rand(-2, 2), vy: rand(-4, -2), life: 0.5, t: 0, c: '#bfe3f7', r: rand(2, 4) });
@@ -852,7 +966,11 @@ function updateColdBar() {
   const k = Math.max(0, cold / section().coldTime);
   coldFill.style.transform = `scaleX(${k})`;
   coldFill.classList.toggle('low', k < 0.25);
-  $('nog').classList.toggle('hidden', nog <= 0);
+  const nogEl = $('nog');
+  nogEl.classList.toggle('hidden', nog <= 0);
+  nogEl.classList.toggle('tipsy', tipsy > 0);
+  const label = `🥛 ×${mult()}`;
+  if (nogEl.textContent !== label) nogEl.textContent = label;
 }
 
 // The progress bar: a dot for each checkpoint, the house at the end, and Grandma moving along.
@@ -967,6 +1085,7 @@ if (DEBUG) {
     stats: () => ({
       state, night, score, lives, cold: +cold.toFixed(1), row: gran.row, x: +gran.x.toFixed(2), cam: +cam.toFixed(2),
       reached, section: route.sections[L.sectionOf(route, gran.row)].name, homeRow: route.homeRow, santa: santa.phase,
+      nog, tipsy: +tipsy.toFixed(1), stumble: gran.stumble, stumbling: gran.stumbling, drops: drops.length,
     }),
     route: () => route.rows.map((r) => r.type),
     lane: (row) => ({ dir: lanes[row].dir, kind: lanes[row].kind, objs: lanes[row].objs.map((o) => ({ x: o.x, w: o.w })) }),
@@ -977,6 +1096,8 @@ if (DEBUG) {
     santa(row, dir = 1) { santa = { phase: 'warn', t: 0, row, dir, next: 0 }; Sound.sleighBells(); },
     santaSwoop(t = 0.4) { santa.phase = 'swoop'; santa.t = t; },
     invincible(on = true) { invincible = on; },
+    nog(n = 1) { nog += n; tipsy += L.nogTime(nog); },
+    drop(row, col) { drops.push({ row, col, t: 0, variant: 0, landed: false }); },
     kill(kind = 'squash', by = 'car') { loseLife(kind, by); },
     pause(on = true) { paused = on; },
     step(seconds) { for (let t = 0; t < seconds - 1e-9; t += 1 / 60) update(1 / 60); },

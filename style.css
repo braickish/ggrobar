@@ -88,6 +88,7 @@ body {
 @keyframes blink { 50% { opacity: 0.4; } }
 
 .nog {
+  display: inline-block;
   font-weight: 700;
   color: #2b2a48;
   background: var(--warm);
@@ -95,6 +96,10 @@ body {
   padding: 1px 8px;
   font-size: 14px;
 }
+
+.nog.tipsy { animation: tipsy 1.2s ease-in-out infinite; }
+@keyframes tipsy { 0%, 100% { transform: rotate(-6deg); } 50% { transform: rotate(6deg); } }
+@media (prefers-reduced-motion: reduce) { .nog.tipsy { animation: none; } }
 
 #stage {
   position: relative;

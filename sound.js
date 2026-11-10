@@ -171,6 +171,13 @@ export const Sound = (() => {
       bell(1760, 0.08, 0.05, 0.4);
     },
     allSet() { [1047, 1319, 1568, 2093].forEach((f, i) => bell(f, i * 0.09, 0.05, 0.5)); },
+    // A present whistling down out of the sky, then landing in the snow.
+    fall() { tone(1400, 1.2, { to: 500, vol: 0.035, type: 'sine', attack: 0.3 }); },
+    thud() {
+      noise(0.18, { vol: 0.16, freq: 500, to: 120 });
+      tone(150, 0.18, { to: 70, vol: 0.12, type: 'triangle' });
+      bell(1760, 0.05, 0.02, 0.25);
+    },
     nog() { for (let i = 0; i < 3; i++) tone(260 - i * 30, 0.1, { to: 180 - i * 20, vol: 0.08, at: i * 0.12, type: 'triangle' }); },
     home() {
       // A door chime, then a warm chord.
