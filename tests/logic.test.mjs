@@ -210,7 +210,14 @@ test('the first section is a neighborhood: yards, sidewalks, two-lane streets, b
   assert.ok(town.rows.filter((r) => r.type === 'sidewalk').length >= 6);
   assert.ok(town.presentsEvery > 0 && town.raccoonsEvery > 0);
   const busy = (rows) => rows.reduce((n, r) => n + (r.count ?? 0), 0);
-  assert.ok(busy(town.rows.slice(0, 5)) < busy(town.rows.slice(9, 14)));
+  assert.ok(busy(town.rows.slice(0, 6)) < busy(town.rows.slice(11, 17)));
+  // yards are two rows deep, and the two rows never have things in the same column (tall ones would overlap)
+  town.rows.forEach((r, i) => {
+    if (r.type !== 'lawn') return;
+    const other = town.rows[i + 1]?.type === 'lawn' ? town.rows[i + 1] : town.rows[i - 1];
+    assert.equal(other?.type, 'lawn', `row ${i}: a one-row yard`);
+    for (let c = 0; c < L.COLS; c++) assert.ok(r.deco[c] === '.' || other.deco[c] === '.', `row ${i} col ${c}`);
+  });
 });
 
 test('raccoons come out of upright trash cans just ahead of Grandma', () => {

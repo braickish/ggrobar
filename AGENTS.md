@@ -14,13 +14,17 @@ and a regularly swooping sleigh. Built for a parent and their kids; keep it appr
   a `checkpoint` row before every section after the first, and Grandma's `yard` (the only house) at the end.
   Checkpoints refill the cold meter (per-section `coldTime`) and are where she respawns. Reaching the yard is the
   win; "Next Christmas Eve" rebuilds the route with `night + 1` (faster, more sleigh) keeping score and lives.
-- Scrolling: world coordinates, row r spans y = -(r+1)·T..-r·T. `cam` is the row at the bottom of the 910-unit view;
+- View size: 910 units tall (`H_WIDE`) on wide screens. On a phone held upright (`#stage.fill`) the board fills the
+  width edge to edge and `H` is whatever fits the height (`H_MIN`..`H_MAX`), drawn at ≤2× pixel density (2.5× halved
+  the throttled frame rate). The user asked for full-screen on iPhone.
+- Scrolling: world coordinates, row r spans y = -(r+1)·T..-r·T. `cam` is the row at the bottom of the `H`-unit view;
   it glides forward to keep her `GRAN_FROM_BOTTOM` rows up and never moves back except on respawn. She can't step
   below the screen. The sky + cottage sit above the yard, and `camMax` stops the camera with them filling the top.
 - Neighborhood (first section, "Holly Lane"): `lawn` rows have `deco: 'S..B.T...'` (snowman / lit bush / little tree,
   blocking like trees, drawn by `Art.yardDeco`); `sidewalk` rows have `ebike`, `carolers` (stop to sing) and `dogwalker`
   (stops to sniff); e-bikes ride the `road` rows. The user wanted it to feel like a real neighborhood: blocks of yard /
-  sidewalk / two-lane street (a `road` row with no `kind` is an empty lane) / sidewalk (never two sidewalks in a row, tested), quiet at first, then Main Street at the top.
+  two-row yard (things in its two rows never share a column, tested) / sidewalk / two-lane street (a `road` row with
+  no `kind` is an empty lane) / sidewalk (never two sidewalks in a row, tested), quiet at first, then Main Street at the top.
   Sections with `presentsEvery` drop presents near her (`pickDropSpot`): shadow + red ring for `DROP_WARN` s, then it
   lands and squashes her if she's on that tile. A landed present is worth `DROP_PTS` if she steps on it, vanishes if a
   mover drives over its tile (`presentRunOver`), and pops after `DROP_STAY` s (same sparkle as being run over; the user didn't want blinking).

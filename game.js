@@ -1,11 +1,14 @@
-import { SECTIONS } from './stages.js?v=202611102314';
-import * as L from './logic.js?v=202611102314';
-import * as Art from './art.js?v=202611102314';
-import { Sound } from './sound.js?v=202611102314';
+import { SECTIONS } from './stages.js?v=202611102321';
+import * as L from './logic.js?v=202611102321';
+import * as Art from './art.js?v=202611102321';
+import { Sound } from './sound.js?v=202611102321';
 
 const T = Art.TILE;
 const W = L.COLS * T;                           // 540
-const H = 910;                                  // the view is a bit over 15 rows tall
+// How much of the walk you see: 910 units (a bit over 15 rows) on wide screens. On a phone held upright the
+// board fills the whole width, and the view is as tall as the screen allows (more or fewer rows).
+const H_WIDE = 910, H_MIN = 640, H_MAX = 1300;
+let H = H_WIDE;
 const SKY = 130;                                // the night sky and cottage above Grandma's yard
 const HOP_TIME = 0.17;                          // one toddling step
 const SPIN_TIME = 0.5;                          // the twirl when she bounces off something
@@ -709,13 +712,21 @@ function drawGround(lo, hi) {
 // Resizing clears the canvas and every cached drawing, so only do it when the size really changes, and draw
 // straight away afterwards (otherwise the board flashes black for a frame and stutters while sprites redraw).
 function resize() {
-  const r = stageEl.getBoundingClientRect();
-  const d = Math.min(window.devicePixelRatio || 1, 2.5);
-  let s = Math.min((r.width - 16) / W, (r.height - 4) / H);
+  const upright = window.innerHeight > window.innerWidth * 1.2;
+  stageEl.classList.toggle('fill', upright);
+  const box = stageEl.getBoundingClientRect();
+  const r = { width: box.width, height: box.height - parseFloat(getComputedStyle(stageEl).paddingBottom || 0) };
+  // full-width phone boards are big, so they draw at up to 2× pixel density (still crisp) to keep the frame rate
+  const d = Math.min(window.devicePixelRatio || 1, upright ? 2 : 2.5);
+  const h = upright ? clamp((W * r.height) / r.width, H_MIN, H_MAX) : H_WIDE;
+  const gutter = upright ? 0 : 16;
+  let s = Math.min((r.width - gutter) / W, (r.height - (upright ? 0 : 4)) / h);
   // round so a row is a whole number of pixels, which keeps the ground copy pixel-exact
   s = Math.max(1, Math.floor(T * s * d)) / (T * d);
-  if (s === scale && d === dpr && grain) return;
-  scale = s; dpr = d;
+  if (s === scale && d === dpr && h === H && grain) return;
+  scale = s; dpr = d; H = h;
+  cam = Math.min(cam, Math.max(0, camMax()));
+  makeSnow(snow.length || 90);
   canvas.style.width = `${Math.floor(W * scale)}px`;
   canvas.style.height = `${Math.floor(H * scale)}px`;
   document.documentElement.style.setProperty('--board-w', `${Math.floor(W * scale)}px`);
@@ -1135,29 +1146,34 @@ window.addEventListener('keydown', (e) => {
 
 // Swipe anywhere, or tap toward where you want her to go.
 let touch = null;
+// A swipe moves her as soon as the finger has gone SWIPE_PX in one direction (no waiting for it to lift);
+// a tap (lifted without swiping) moves her toward where you tapped.
+const SWIPE_PX = 14;
+const canSteer = () => state === 'playing' || state === 'dying' || state === 'home';
 stageEl.addEventListener('pointerdown', (e) => {
   if (e.target.closest('button, .panel')) return;
   Sound.unlock();
-  touch = { x: e.clientX, y: e.clientY, id: e.pointerId };
+  touch = { x: e.clientX, y: e.clientY, id: e.pointerId, swiped: false };
+});
+stageEl.addEventListener('pointermove', (e) => {
+  if (!touch || touch.id !== e.pointerId || touch.swiped) return;
+  const dx = e.clientX - touch.x, dy = e.clientY - touch.y;
+  if (Math.hypot(dx, dy) < SWIPE_PX) return;
+  touch.swiped = true;
+  if (canSteer()) tryMove(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'));
 });
 stageEl.addEventListener('pointerup', (e) => {
   if (!touch || touch.id !== e.pointerId) return;
-  const dx = e.clientX - touch.x, dy = e.clientY - touch.y;
+  const swiped = touch.swiped;
   touch = null;
-  if (state !== 'playing' && state !== 'dying' && state !== 'home') return;
-  let dir;
-  if (Math.hypot(dx, dy) > 22) {
-    dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
-  } else {
-    // a tap: which way is it from Grandma?
-    const r = canvas.getBoundingClientRect();
-    const gx = r.left + currentX() * T * scale;
-    const gy = r.top + (rowFeet(currentRow()) - 28 + H + cam * T) * scale;
-    const tx = e.clientX - gx, ty = e.clientY - gy;
-    if (Math.hypot(tx, ty) < 10) return;
-    dir = Math.abs(tx) > Math.abs(ty) ? (tx > 0 ? 'right' : 'left') : (ty > 0 ? 'down' : 'up');
-  }
-  tryMove(dir);
+  if (swiped || !canSteer()) return;
+  // a tap: which way is it from Grandma?
+  const r = canvas.getBoundingClientRect();
+  const gx = r.left + currentX() * T * scale;
+  const gy = r.top + (rowFeet(currentRow()) - 28 + H + cam * T) * scale;
+  const tx = e.clientX - gx, ty = e.clientY - gy;
+  if (Math.hypot(tx, ty) < 10) return;
+  tryMove(Math.abs(tx) > Math.abs(ty) ? (tx > 0 ? 'right' : 'left') : (ty > 0 ? 'down' : 'up'));
 });
 stageEl.addEventListener('pointercancel', () => { touch = null; });
 document.addEventListener('touchmove', (e) => { if (state !== 'title' && state !== 'over' && state !== 'won') e.preventDefault(); }, { passive: false });

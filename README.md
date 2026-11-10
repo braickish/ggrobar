@@ -8,7 +8,8 @@ in it that comes through every few seconds.
 
 ## How to play
 
-- **Computer:** arrow keys or WASD. **Phone:** swipe, or tap on the side of Grandma you want her to go.
+- **Computer:** arrow keys or WASD. **Phone:** swipe (she moves as soon as your finger starts moving), or tap on
+  the side of Grandma you want her to go.
 - When you hear **sleigh bells** and see a **red glow** at the side of a row, that's the lead reindeer's nose:
   the sleigh is about to swoop through that row. Get out of it!
 - Walking into the **side** of a car, sled, bike or animal bounces Grandma back: she twirls, then stumbles

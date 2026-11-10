@@ -113,6 +113,9 @@ body {
   padding: 0 0 8px;
   touch-action: none;
 }
+/* phones held upright: the board runs edge to edge */
+#stage.fill { padding: 0 0 env(safe-area-inset-bottom); align-items: flex-start; }
+#stage.fill #game { border-radius: 0; box-shadow: none; }
 
 #board { position: relative; line-height: 0; }
 
