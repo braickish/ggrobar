@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>GGROBAR</title>
+  <meta name="description" content="Get Grandma home on Christmas Eve, past cars, sleds, thin ice and one very fast sleigh.">
+  <meta name="theme-color" content="#141b3f">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦌</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Mountains+of+Christmas:wght@700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="hud">
+    <div class="title">
+      <h1>GGROBAR</h1>
+      <p class="tagline">Get Grandma home on Christmas Eve</p>
+    </div>
+    <div class="scores">
+      <div class="stat"><span class="label">Score</span><span id="score">0</span></div>
+      <div class="stat"><span class="label">Best</span><span id="best">0</span></div>
+      <div class="stat"><span class="label">Round</span><span id="round">1</span></div>
+    </div>
+  </header>
+
+  <div class="status">
+    <div id="lives" class="lives" aria-label="3 lives left"></div>
+    <div class="cold" title="Grandma's getting cold. Get her home before it runs out!">
+      <span class="cold-icon" aria-hidden="true">❄️</span>
+      <div class="cold-bar"><div id="cold-fill" class="cold-fill"></div></div>
+    </div>
+    <span id="nog" class="nog hidden">🥛 ×2</span>
+  </div>
+
+  <main id="stage">
+    <div id="board">
+      <canvas id="game" aria-label="The way home. Arrow keys, swipe, or tap to move Grandma."></canvas>
+      <div class="board-btns">
+        <button id="mute-btn" class="icon-btn" aria-label="Sound on">🔊</button>
+        <button id="restart-btn" class="icon-btn" aria-label="Start over">↻</button>
+      </div>
+    </div>
+
+    <div id="title-panel" class="panel">
+      <div class="card">
+        <h2>GGROBAR</h2>
+        <p>It's Christmas Eve, and Grandma's walking home from the party. Help her cross the roads, the sledding hill and the frozen pond.</p>
+        <p><strong>Watch for the shadow.</strong> When you hear sleigh bells, a sleigh is about to swoop through that row.</p>
+        <p class="small">Grab her reading glasses, fruitcake and present for a bonus. Eggnog doubles your points, but she gets a bit wobbly. Don't let her get too cold!</p>
+        <button id="start-btn" class="big-btn">Start walking</button>
+        <p class="keys">Arrow keys or WASD · Swipe or tap on a phone</p>
+      </div>
+    </div>
+
+    <div id="over-panel" class="panel hidden">
+      <div class="card">
+        <h2>Oh, Grandma!</h2>
+        <p class="final">Score <span id="final-score">0</span></p>
+        <p class="small">You made it to round <span id="final-round">1</span>.</p>
+        <p id="new-best" class="new-best hidden">New best!</p>
+        <button id="again-btn" class="big-btn">Try again</button>
+      </div>
+    </div>
+  </main>
+
+  <script type="module" src="game.js"></script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+{
+  "name": "ggrobar",
+  "private": true,
+  "type": "module",
+  "description": "Tools only: the game itself is a static site with no build step.",
+  "scripts": {
+    "test": "node --test tests/logic.test.mjs"
+  }
+}
