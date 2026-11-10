@@ -47,6 +47,10 @@ and a regularly swooping sleigh. Built for a parent and their kids; keep it appr
   wobble differently; dark ink outlines get a second thinner pass). Moving things "boil": `sprite()` caches
   `BOIL_FRAMES` versions and `setTime()` swaps them ~6×/s. Scenery (house, trees, lampposts) uses `still`
   sprites that never boil (the boiling house looked like it was shaking). Sprites get a crayon texture.
+- Smoothness: the loop advances by the real frame time (split into ≤1/60 s steps), so 120 Hz screens don't judder;
+  anything per-update must scale by `dt` (particles do). `resize()` returns early if the size is unchanged and draws
+  at once after resizing: a resize blanks the canvas and clears every sprite cache. The header has a fixed height so
+  a growing score can't wrap the tagline and resize the board (that caused black flashes and stutter).
 - Performance (tested with Chrome's CPU throttled 4×, phone-sized at DPR 3): don't draw complex sketchy shapes every
   frame; cache them. Grandma is cached per pose (`grandmaPose`), the cottage as one sprite with smoke and twinkle
   live. The ground is a ring of 32 row slots on one canvas (`paintRow`/`drawGround`), copied to the screen

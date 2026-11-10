@@ -31,6 +31,7 @@ export const SET_BONUS = 150;                  // glasses + fruitcake + present 
 export const COLD_PTS = 3;                     // per second left on the cold meter
 // Eggnog: each glass adds one to the points multiplier (×2, ×3, ×4…), kept until she loses a life.
 // It also makes her tipsy for a while, longer with every glass, and tipsier.
+export const EXTRA_NOG = 0.5;                  // two glasses per section, plus this chance of a third
 export const NOG_TIME = 12;                    // seconds of wobble from the first glass
 export const NOG_TIME_EACH = 6;                // ...and this much more for every glass after it
 export const nogTime = (glasses) => NOG_TIME + NOG_TIME_EACH * (glasses - 1);

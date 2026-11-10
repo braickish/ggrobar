@@ -39,7 +39,7 @@ in it that comes through every few seconds.
 | A present that fell from the sky | 50 |
 | All three in one section | 150 bonus |
 | Getting home | 300, plus 3 per second left on the cold meter, plus 100 per life left |
-| Eggnog | ×2 points, then ×3, ×4… with every glass, until she loses a life. Each glass makes her tipsy for longer (12 s, then 18, 24…): most steps forward or back veer left or right, more with every glass |
+| Eggnog (2–3 per section) | ×2 points, then ×3, ×4… with every glass, until she loses a life. Each glass makes her tipsy for longer (12 s, then 18, 24…): most steps forward or back veer left or right, more with every glass |
 
 The walk gets busier as it goes: each section is a little faster than the last, and the sleigh comes more often.
 

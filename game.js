@@ -1,7 +1,7 @@
-import { SECTIONS } from './stages.js?v=202611102307';
-import * as L from './logic.js?v=202611102307';
-import * as Art from './art.js?v=202611102307';
-import { Sound } from './sound.js?v=202611102307';
+import { SECTIONS } from './stages.js?v=202611102314';
+import * as L from './logic.js?v=202611102314';
+import * as Art from './art.js?v=202611102314';
+import { Sound } from './sound.js?v=202611102314';
 
 const T = Art.TILE;
 const W = L.COLS * T;                           // 540
@@ -130,7 +130,13 @@ function placePickups() {
     const spots = L.pickupSpots(route, i);
     const take = () => spots.splice(Math.floor(Math.random() * spots.length), 1)[0];
     for (const kind of ['glasses', 'fruitcake', 'present']) pickups.push({ kind, section: i, ...take(), got: false });
-    if (Math.random() < 0.7) pickups.push({ kind: 'eggnog', section: i, ...take(), got: false });
+    // eggnog: one in each half of the section, and sometimes a third anywhere
+    const mid = (sec.startRow + sec.endRow) / 2;
+    for (const half of [(sp) => sp.row < mid, (sp) => sp.row >= mid]) {
+      const idx = spots.map((sp, j) => (half(sp) ? j : -1)).filter((j) => j >= 0);
+      if (idx.length) pickups.push({ kind: 'eggnog', section: i, ...spots.splice(idx[Math.floor(Math.random() * idx.length)], 1)[0], got: false });
+    }
+    if (Math.random() < L.EXTRA_NOG) pickups.push({ kind: 'eggnog', section: i, ...take(), got: false });
   });
 }
 
@@ -355,7 +361,7 @@ function updateSanta(dt) {
     if (santa.t >= L.SANTA_WARN) { santa.phase = 'swoop'; santa.t = 0; Sound.whoosh(); Sound.ho(); }
   } else if (santa.phase === 'swoop') {
     santa.t += dt;
-    if (Math.random() < 0.5) {
+    if (Math.random() < 30 * dt) {
       const sx = L.sleighX(santa.dir, santa.t) + (santa.dir > 0 ? 0 : L.SLEIGH_W);
       particles.push({ x: sx * T, y: rowTop(santa.row) + rand(10, 40), vx: -santa.dir * rand(0.5, 2), vy: rand(-0.5, 0.5), life: rand(0.4, 0.9), t: 0, c: '#fff6d0', r: rand(1.5, 3), star: true });
     }
@@ -616,7 +622,8 @@ function sparkle(x, y, c) {
   }
 }
 function updateParticles(dt) {
-  for (const p of particles) { p.t += dt; p.x += p.vx; p.y += p.vy; p.vy += 0.06; }
+  const k = dt * 60;                              // particle speeds are per 1/60 s
+  for (const p of particles) { p.t += dt; p.x += p.vx * k; p.y += p.vy * k; p.vy += 0.06 * k; }
   particles = particles.filter((p) => p.t < p.life);
   for (const f of floaters) f.t += dt;
   floaters = floaters.filter((f) => f.t < 1.4);
@@ -699,12 +706,16 @@ function drawGround(lo, hi) {
   ctx.restore();
 }
 
+// Resizing clears the canvas and every cached drawing, so only do it when the size really changes, and draw
+// straight away afterwards (otherwise the board flashes black for a frame and stutters while sprites redraw).
 function resize() {
   const r = stageEl.getBoundingClientRect();
-  scale = Math.min((r.width - 16) / W, (r.height - 4) / H);
-  dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+  const d = Math.min(window.devicePixelRatio || 1, 2.5);
+  let s = Math.min((r.width - 16) / W, (r.height - 4) / H);
   // round so a row is a whole number of pixels, which keeps the ground copy pixel-exact
-  scale = Math.max(1, Math.floor(T * scale * dpr)) / (T * dpr);
+  s = Math.max(1, Math.floor(T * s * d)) / (T * d);
+  if (s === scale && d === dpr && grain) return;
+  scale = s; dpr = d;
   canvas.style.width = `${Math.floor(W * scale)}px`;
   canvas.style.height = `${Math.floor(H * scale)}px`;
   document.documentElement.style.setProperty('--board-w', `${Math.floor(W * scale)}px`);
@@ -715,6 +726,7 @@ function resize() {
   warm = Art.warmTasks();
   grain = offscreen(W, H, (g) => Art.drawGrain(g, W, H));
   sky = offscreen(W, SKY, (g) => Art.drawSkyBand(g, W, SKY, 1));
+  draw();
 }
 
 function offscreen(w, h, draw) {
@@ -1163,13 +1175,16 @@ showMute();
 
 // ---- Loop ----
 let last = performance.now();
-let acc = 0;
 const STEP = 1 / 60;
+// Every frame moves the game on by exactly the time since the last one (in steps of at most 1/60 s), so a
+// 120 Hz screen gets smooth motion on every frame instead of a fixed 60 Hz tick that judders.
 function frame(now) {
-  acc += Math.min(0.1, (now - last) / 1000);
+  const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
-  if (paused) acc = 0;
-  while (acc >= STEP) { update(STEP); acc -= STEP; }
+  if (!paused && dt > 0) {
+    const n = Math.max(1, Math.ceil(dt / STEP - 0.05));
+    for (let i = 0; i < n; i++) update(dt / n);
+  }
   draw();
   requestAnimationFrame(frame);
 }
@@ -1191,6 +1206,7 @@ if (DEBUG) {
     stats: () => ({
       state, night, score, lives, cold: +cold.toFixed(1), row: gran.row, x: +gran.x.toFixed(2), cam: +cam.toFixed(2),
       reached, section: route.sections[L.sectionOf(route, gran.row)].name, homeRow: route.homeRow, santa: santa.phase,
+      nogsOnRoute: pickups.filter((q) => q.kind === 'eggnog').map((q) => q.section).join(''),
       nog, tipsy: +tipsy.toFixed(1), stumble: gran.stumble, stumbling: gran.stumbling, drops: drops.length,
     }),
     route: () => route.rows.map((r) => r.type),
