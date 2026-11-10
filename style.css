@@ -9,7 +9,7 @@
   --red: #c9443c;
   --green: #2f7a55;
   --title-font: 'Mountains of Christmas', Georgia, serif;
-  --body-font: 'Fredoka', system-ui, sans-serif;
+  --body-font: 'Gaegu', 'Comic Sans MS', system-ui, sans-serif;
 }
 
 * { box-sizing: border-box; }
@@ -54,14 +54,14 @@ body {
   text-shadow: 0 2px 0 #0b0f2a, 0 0 18px rgba(255, 210, 122, 0.35);
 }
 
-.tagline { margin: 2px 0 0; font-size: 13px; color: var(--muted); white-space: nowrap; }
-@media (max-width: 420px) { .hud { gap: 6px; } .tagline { font-size: 11px; } .stat span:last-child { font-size: 20px; } .scores { gap: 10px; } }
+.tagline { margin: 2px 0 0; font-size: 16px; font-weight: 700; color: var(--muted); white-space: nowrap; }
+@media (max-width: 420px) { .hud { gap: 6px; } .tagline { font-size: 14px; } .stat span:last-child { font-size: 24px; } .scores { gap: 10px; } }
 
 .scores { display: flex; gap: 14px; }
 
 .stat { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.05; }
-.stat .label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
-.stat span:last-child { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.stat .label { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+.stat span:last-child { font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; }
 
 .status { padding-top: 6px; padding-bottom: 6px; }
 
@@ -88,7 +88,7 @@ body {
 @keyframes blink { 50% { opacity: 0.4; } }
 
 .nog {
-  font-weight: 600;
+  font-weight: 700;
   color: #2b2a48;
   background: var(--warm);
   border-radius: 10px;
@@ -160,17 +160,17 @@ body {
   color: var(--red);
   line-height: 1;
 }
-.card p { margin: 8px 0; font-size: 16px; line-height: 1.35; }
-.card .small { font-size: 14px; color: #555476; }
-.card .keys { font-size: 13px; color: #6a6990; margin-top: 12px; }
-.final { font-size: 24px !important; font-weight: 600; }
+.card p { margin: 8px 0; font-size: 19px; line-height: 1.25; }
+.card .small { font-size: 17px; color: #555476; }
+.card .keys { font-size: 16px; color: #6a6990; margin-top: 12px; }
+.final { font-size: 28px !important; font-weight: 700; }
 .new-best { color: var(--green); font-weight: 600; }
 
 .big-btn {
   margin-top: 10px;
   font-family: var(--body-font);
-  font-size: 20px;
-  font-weight: 600;
+  font-size: 24px;
+  font-weight: 700;
   color: #fff;
   background: linear-gradient(#d9473c, #a3332d);
   border: none;
@@ -180,3 +180,10 @@ body {
   cursor: pointer;
 }
 .big-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #6e211c; }
+@media (max-width: 380px) {
+  .hud { padding: 8px 10px 0; }
+  .tagline { font-size: 12.5px; }
+  .scores { gap: 8px; }
+  .stat .label { font-size: 11px; letter-spacing: 0.5px; }
+  .stat span:last-child { font-size: 22px; }
+}

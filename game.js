@@ -7,7 +7,8 @@ const T = Art.TILE;
 const TOP = 130;                                // the sky and cottage strip above the rows
 const W = L.COLS * T;                           // 540
 const H = TOP + L.ROWS * T;                     // 910
-const HOP_TIME = 0.13;
+const HOP_TIME = 0.17;                          // one toddling step
+const GRAN_SCALE = 0.8;
 const DEATH_TIME = 1.7;
 const HOME_TIME = 2.4;
 const BANNER_TIME = 2.2;
@@ -22,8 +23,10 @@ const ctx = canvas.getContext('2d');
 const stageEl = $('stage');
 
 const rowTop = (row) => TOP + (L.ROWS - 1 - row) * T;
-const rowFeet = (row) => rowTop(row) + T - 9;
+const rowFeet = (row) => rowTop(row) + T - 10;     // she stands in the middle of the lane, like the cars
 const rand = (lo, hi) => lo + Math.random() * (hi - lo);
+// Ease in and out, so each step starts gently and settles into place.
+const ease = (t) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
 
 const load = (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } };
 const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
@@ -52,7 +55,7 @@ let homeT = 0;
 let invincible = false;
 let paused = false;            // debug only: stop the clock to look at a moment
 
-const gran = { x: START.x, row: START.row, fromX: START.x, fromRow: START.row, hop: 1, facing: 'up' };
+const gran = { x: START.x, row: START.row, fromX: START.x, fromRow: START.row, hop: 1, facing: 'up', step: 1 };
 let queued = null;
 
 let santa = { phase: 'idle', next: 5, t: 0, row: 1, dir: 1 };
@@ -177,7 +180,7 @@ function addScore(pts, x, y, text) {
 }
 
 // ---- Moving Grandma ----
-const currentX = () => gran.fromX + (gran.x - gran.fromX) * Math.min(1, gran.hop);
+const currentX = () => gran.fromX + (gran.x - gran.fromX) * ease(Math.min(1, gran.hop));
 const currentRow = () => (gran.hop < 0.5 ? gran.fromRow : gran.row);
 
 function tryMove(dir) {
@@ -203,6 +206,7 @@ function hop(dir) {
   gran.fromX = gran.x; gran.fromRow = fromRow;
   gran.x = x; gran.row = row;
   gran.hop = 0;
+  gran.step = -gran.step;
   Sound.hop();
 }
 
@@ -403,6 +407,7 @@ function buildBackground() {
 }
 
 function draw() {
+  Art.setTime(time);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   if (bg) ctx.drawImage(bg, 0, 0);
   ctx.setTransform(scale * dpr, 0, 0, scale * dpr, 0, 0);
@@ -435,11 +440,24 @@ function draw() {
     else { Art.circ(ctx, p.x, p.y, p.r); ctx.fillStyle = p.c; ctx.fill(); }
   }
   ctx.globalAlpha = 1;
+  ctx.strokeStyle = '#ffffff';
+  ctx.fillStyle = '#ffffff';
+  ctx.lineWidth = 1.3;
   for (const s of snow) {
     ctx.globalAlpha = 0.45 + s.z * 0.5;
-    Art.circ(ctx, s.x, s.y, s.r);
-    ctx.fillStyle = '#ffffff';
-    ctx.fill();
+    if (s.z > 0.8) {
+      const r = s.r * 1.8, a = time * 0.8 + s.sway;
+      ctx.beginPath();
+      for (let i = 0; i < 3; i++) {
+        const ang = a + (i * Math.PI) / 3;
+        ctx.moveTo(s.x - Math.cos(ang) * r, s.y - Math.sin(ang) * r);
+        ctx.lineTo(s.x + Math.cos(ang) * r, s.y + Math.sin(ang) * r);
+      }
+      ctx.stroke();
+    } else {
+      Art.circ(ctx, s.x, s.y, s.r);
+      ctx.fill();
+    }
   }
   ctx.globalAlpha = 1;
 
@@ -452,11 +470,13 @@ function draw() {
 
 function drawLane(lane) {
   if (!lane.objs.length) return;
-  const y = rowTop(lane.row);
   const flip = lane.dir < 0;
   for (const o of lane.objs) {
     if (o.x > L.COLS + 0.5 || o.x + o.w < -0.5) continue;
     const x = o.x * T;
+    // a little bounce: cars on their springs, sleds over bumps
+    const bounce = lane.kind === 'floe' ? 0 : Math.abs(Math.sin(time * (lane.kind === 'sled' ? 9 : 6) + o.phase * 3)) * (lane.kind === 'sled' ? 2.5 : 1.2) * lane.moving;
+    const y = rowTop(lane.row) - bounce;
     if (lane.kind === 'floe') {
       const st = L.floeState(o, time);
       ctx.save();
@@ -483,7 +503,7 @@ function drawLane(lane) {
           const k = (time * 0.6 + i * 0.5) % 1;
           ctx.globalAlpha = 1 - k;
           ctx.fillStyle = '#fff6d0';
-          ctx.font = '600 18px Fredoka, sans-serif';
+          ctx.font = '700 20px Gaegu, sans-serif';
           ctx.fillText(i ? '♫' : '♪', x + o.w * T * (0.3 + i * 0.3) + Math.sin(k * 6) * 4, y + 6 - k * 26);
         }
         ctx.globalAlpha = 1;
@@ -495,7 +515,7 @@ function drawLane(lane) {
 
 function drawGrandma() {
   const x = currentX() * T;
-  const y = rowFeet(gran.fromRow) + (rowFeet(gran.row) - rowFeet(gran.fromRow)) * Math.min(1, gran.hop);
+  const y = rowFeet(gran.fromRow) + (rowFeet(gran.row) - rowFeet(gran.fromRow)) * ease(Math.min(1, gran.hop));
   let tilt = nog > 0 ? Math.sin(time * 5) * 0.12 : 0;
   const shiver = state === 'playing' && cold < 8 ? 2.5 : 0;
   if (state === 'home') {
@@ -503,7 +523,7 @@ function drawGrandma() {
     const k = Math.min(1, homeT / 1.2);
     const hx = x + (W / 2 - x) * k;
     const hy = y - 30 * k;
-    if (k < 1) Art.grandma(ctx, hx, hy, { facing: 'up', hop: (homeT * 4) % 1, scale: 1 - 0.25 * k });
+    if (k < 1) Art.grandma(ctx, hx, hy, { facing: 'up', hop: (homeT * 3) % 1, step: Math.floor(homeT * 3) % 2 ? 1 : -1, scale: GRAN_SCALE * (1 - 0.25 * k) });
     return;
   }
   // on a thin floe that's cracking? wobble
@@ -512,13 +532,13 @@ function drawGrandma() {
     const f = L.floeUnder(lane, gran.x, time);
     if (f && L.floeState(f, time) === 'cracking') tilt += Math.sin(time * 30) * 0.06;
   }
-  Art.grandma(ctx, x, y, { facing: gran.facing, hop: gran.hop < 1 ? gran.hop : 0, tilt, shiver });
+  Art.grandma(ctx, x, y, { facing: gran.facing, hop: gran.hop < 1 ? gran.hop : 0, step: gran.step, tilt, shiver, scale: GRAN_SCALE });
 }
 
 function drawDeath() {
   const x = death.x * T, y = rowFeet(death.row);
   ctx.save();
-  ctx.translate(x, y); ctx.scale(1.2, 1.2); ctx.translate(-x, -y);
+  ctx.translate(x, y); ctx.scale(0.95, 0.95); ctx.translate(-x, -y);
   if (death.kind === 'squash') Art.pancake(ctx, x, y, death.t, death.by);
   else if (death.kind === 'splash') {
     if (death.t < 0.3) {
@@ -581,7 +601,7 @@ function drawText() {
     if (f.t < 0) continue;
     const k = f.t / 1.4;
     ctx.globalAlpha = Math.min(1, (1 - k) * 2.5);
-    ctx.font = `600 ${f.size}px Fredoka, sans-serif`;
+    ctx.font = `700 ${Math.round(f.size * 1.2)}px Gaegu, sans-serif`;
     ctx.lineWidth = 4;
     ctx.strokeStyle = 'rgba(30,30,70,0.85)';
     const y = f.y - k * 34;
@@ -602,7 +622,7 @@ function drawText() {
     ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(30,30,70,0.9)';
     ctx.strokeText(banner.text, W / 2, y - 14);
     ctx.fillText(banner.text, W / 2, y - 14);
-    ctx.font = '600 22px Fredoka, sans-serif';
+    ctx.font = '700 28px Gaegu, sans-serif';
     ctx.fillStyle = '#ffd27a';
     ctx.fillText(banner.sub, W / 2, y + 26);
     ctx.globalAlpha = 1;
@@ -671,7 +691,7 @@ stageEl.addEventListener('pointerup', (e) => {
     // a tap: which way is it from Grandma?
     const r = canvas.getBoundingClientRect();
     const gx = r.left + currentX() * T * scale;
-    const gy = r.top + (rowFeet(currentRow()) - 24) * scale;
+    const gy = r.top + (rowFeet(currentRow()) - 20) * scale;
     const tx = e.clientX - gx, ty = e.clientY - gy;
     if (Math.hypot(tx, ty) < 10) return;
     dir = Math.abs(tx) > Math.abs(ty) ? (tx > 0 ? 'right' : 'left') : (ty > 0 ? 'down' : 'up');
@@ -724,5 +744,6 @@ if (DEBUG) {
     invincible(on = true) { invincible = on; },
     kill(kind = 'squash', by = 'car') { loseLife(kind, by); },
     pause(on = true) { paused = on; },
+    step(seconds) { for (let t = 0; t < seconds - 1e-9; t += 1 / 60) update(1 / 60); },
   };
 }

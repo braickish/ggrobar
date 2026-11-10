@@ -15,10 +15,17 @@ and a regularly swooping sleigh. Built for a parent and their kids; keep it appr
   `tests/logic.test.mjs` checks every hazard row leaves a gap ≥ 1.8 tiles and pond rows don't leave long waits.
 - Santa: idle → warn (bells, bell icon and a growing shadow on the chosen row, `SANTA_WARN` s) → swoop.
   Row picking favours rows near Grandma (`pickSantaRow`). Interval comes from `roundSetup(r).santaEvery`.
-- Art: storybook style drawn with canvas calls. Static things are cached sprites (`sprite()` in art.js,
-  rebuilt when the scale changes); Grandma, the cottage lights/smoke, deaths and effects draw each frame.
-  The row backgrounds and paper grain are prerendered per stage/resize.
-- Fonts: Mountains of Christmas (titles) and Fredoka (UI) from Google Fonts.
+- Art: hand-drawn storybook style drawn with canvas calls. Every shape goes through `sketchy()` in art.js, a
+  Proxy over the 2D context that records path commands and redraws them as wobbly lines (fill and outline
+  wobble differently; dark ink outlines get a second thinner pass). Lines "boil": `sprite()` caches
+  `BOIL_FRAMES` versions of everything and `setTime()` swaps them ~6×/s. Sprites get a crayon texture.
+  Don't draw complex sketchy shapes every frame (it cost frames on a slowed CPU); cache them as sprites.
+  Grandma is cached per pose (`grandmaPose`: facing × step progress in quarters × which foot), the cottage
+  as one sprite with smoke and twinkle glows drawn live. Deaths draw sketchy live (they're brief).
+  Row backgrounds (with pencil hatching on snow) and the crayon grain are prerendered per stage/resize.
+- Grandma toddles (`HOP_TIME` 0.17 s, eased, 4-unit lift, rocks side to side, alternating foot) at 0.8 scale
+  with her feet 10 units above the lane's bottom so she sits in the lane like the vehicles.
+- Fonts: Mountains of Christmas (titles) and Gaegu (handwritten UI and in-game text) from Google Fonts.
 - `?debug` exposes `window.ggrobar` (see README). Screenshots/play tests were done with Playwright from
   `~/workspace/projects/witches-brew/node_modules`; there's no Playwright dependency here.
 - Deployed on GitHub Pages from `main` at the repo root: https://braickish.github.io/ggrobar/

@@ -16,13 +16,186 @@ export const C = {
 
 const TAU = Math.PI * 2;
 
+// ---- The hand-drawn wobble ----
+// Every shape goes through sketchy(): its outline is traced as many short steps with a gentle, smooth
+// wobble, the fill is traced with a different wobble so it doesn't quite meet the line, and dark ink
+// lines get a second, thinner pass like a pencil going over them twice. Lines "boil": there are
+// BOIL_FRAMES slightly different versions of everything, swapped a few times a second.
+export const BOIL_FRAMES = 3;
+const BOIL_RATE = 6;                 // swaps per second
+const WOBBLE = 1.5;                  // how far lines stray, in game units
+let boil = 0;
+export function setTime(t) { boil = Math.floor(t * BOIL_RATE) % BOIL_FRAMES; }
+
+const PATH_OPS = new Set(['moveTo', 'lineTo', 'quadraticCurveTo', 'bezierCurveTo', 'arc', 'ellipse', 'rect', 'closePath']);
+
+function sketchy(g, seed = 1, amp = WOBBLE) {
+  if (g.isSketchy) return g;
+  let ops = [];
+  let pathSeed = seed;
+  let count = 0;
+  return new Proxy(g, {
+    get(t, prop) {
+      if (prop === 'isSketchy') return true;
+      if (prop === 'beginPath') return () => { ops = []; pathSeed = seed * 977 + ++count; };
+      if (PATH_OPS.has(prop)) return (...a) => { ops.push([prop, a]); };
+      if (prop === 'fill' || prop === 'clip') {
+        return (...a) => { trace(t, flatten(ops), amp * 0.9, pathSeed + 0.5); t[prop](...a); };
+      }
+      if (prop === 'stroke') {
+        return () => {
+          const subs = flatten(ops);
+          trace(t, subs, amp, pathSeed);
+          t.stroke();
+          if (t.strokeStyle === INK && t.lineWidth >= 1.4 && !t.getLineDash().length) {
+            t.save();
+            t.lineWidth *= 0.45;
+            t.globalAlpha *= 0.6;
+            trace(t, subs, amp * 1.7, pathSeed + 0.25);
+            t.stroke();
+            t.restore();
+          }
+        };
+      }
+      const v = t[prop];
+      return typeof v === 'function' ? v.bind(t) : v;
+    },
+    set(t, prop, v) { t[prop] = v; return true; },
+  });
+}
+
+// Turn recorded path commands into lists of points, about every 4 units.
+function flatten(ops) {
+  const subs = [];
+  let sub = null, cur = null;
+  const add = (x, y) => {
+    if (!sub) { sub = { pts: [], closed: false }; subs.push(sub); }
+    sub.pts.push([x, y]);
+    cur = [x, y];
+  };
+  const seg = (x1, y1) => {
+    if (!sub || !cur) { add(x1, y1); return; }
+    const [x0, y0] = cur;
+    const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0) / 4));
+    for (let i = 1; i <= n; i++) add(x0 + ((x1 - x0) * i) / n, y0 + ((y1 - y0) * i) / n);
+  };
+  const curve = (pt, len) => {
+    const n = Math.max(2, Math.ceil(len / 4));
+    for (let i = 1; i <= n; i++) add(...pt(i / n));
+  };
+  const oval = (x, y, rx, ry, rot, s, e, ccw) => {
+    let d = e - s;
+    if (!ccw) { if (d >= TAU) d = TAU; else { d %= TAU; if (d < 0) d += TAU; } }
+    else { if (-d >= TAU) d = -TAU; else { d %= TAU; if (d > 0) d -= TAU; } }
+    const cr = Math.cos(rot), sr = Math.sin(rot);
+    const at = (a) => {
+      const px = Math.cos(a) * rx, py = Math.sin(a) * ry;
+      return [x + px * cr - py * sr, y + px * sr + py * cr];
+    };
+    seg(...at(s));
+    const n = Math.max(6, Math.ceil((Math.abs(d) * Math.max(rx, ry)) / 4));
+    for (let i = 1; i <= n; i++) add(...at(s + (d * i) / n));
+  };
+  for (const [op, a] of ops) {
+    if (op === 'moveTo') { sub = null; add(a[0], a[1]); }
+    else if (op === 'lineTo') seg(a[0], a[1]);
+    else if (op === 'quadraticCurveTo') {
+      if (!cur) add(a[0], a[1]);
+      const [x0, y0] = cur;
+      const len = Math.hypot(a[0] - x0, a[1] - y0) + Math.hypot(a[2] - a[0], a[3] - a[1]);
+      curve((t) => {
+        const u = 1 - t;
+        return [u * u * x0 + 2 * u * t * a[0] + t * t * a[2], u * u * y0 + 2 * u * t * a[1] + t * t * a[3]];
+      }, len);
+    } else if (op === 'bezierCurveTo') {
+      if (!cur) add(a[0], a[1]);
+      const [x0, y0] = cur;
+      const len = Math.hypot(a[0] - x0, a[1] - y0) + Math.hypot(a[2] - a[0], a[3] - a[1]) + Math.hypot(a[4] - a[2], a[5] - a[3]);
+      curve((t) => {
+        const u = 1 - t;
+        return [
+          u * u * u * x0 + 3 * u * u * t * a[0] + 3 * u * t * t * a[2] + t * t * t * a[4],
+          u * u * u * y0 + 3 * u * u * t * a[1] + 3 * u * t * t * a[3] + t * t * t * a[5],
+        ];
+      }, len);
+    } else if (op === 'arc') oval(a[0], a[1], a[2], a[2], 0, a[3], a[4], !!a[5]);
+    else if (op === 'ellipse') oval(a[0], a[1], a[2], a[3], a[4], a[5], a[6], !!a[7]);
+    else if (op === 'rect') {
+      const [x, y, w, h] = a;
+      sub = null; add(x, y); seg(x + w, y); seg(x + w, y + h); seg(x, y + h); seg(x, y);
+      sub.closed = true; sub = null; cur = [x, y];
+    } else if (op === 'closePath') {
+      if (sub) { sub.closed = true; cur = sub.pts[0]; sub = null; }
+    }
+  }
+  return subs;
+}
+
+// Draw the points back as a path with a smooth wobble. Closed shapes wobble in a loop so their
+// ends meet; small shapes wobble less so eyes and buttons stay neat.
+function trace(g, subs, amp, seed) {
+  g.beginPath();
+  subs.forEach((sp, idx) => {
+    const pts = sp.pts;
+    if (!pts.length) return;
+    const first = pts[0], last = pts[pts.length - 1];
+    const closed = sp.closed || (pts.length > 2 && Math.hypot(first[0] - last[0], first[1] - last[1]) < 0.5);
+    let L = 0;
+    const along = [0];
+    for (let i = 1; i < pts.length; i++) { L += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); along.push(L); }
+    const a = Math.min(amp, L * 0.022);
+    const r = seeded(Math.floor(seed * 131 + idx * 17) + 7);
+    const p = [r() * TAU, r() * TAU, r() * TAU, r() * TAU];
+    const f1 = closed ? (TAU * Math.max(1, Math.round(L / 50))) / Math.max(L, 1) : TAU / 50;
+    const f2 = closed ? (TAU * Math.max(2, Math.round(L / 18))) / Math.max(L, 1) : TAU / 18;
+    for (let i = 0; i < pts.length; i++) {
+      const s = along[i];
+      const ox = a * (0.7 * Math.sin(s * f1 + p[0]) + 0.3 * Math.sin(s * f2 + p[1]));
+      const oy = a * (0.7 * Math.sin(s * f1 + p[2]) + 0.3 * Math.sin(s * f2 + p[3]));
+      if (i === 0) g.moveTo(pts[i][0] + ox, pts[i][1] + oy);
+      else g.lineTo(pts[i][0] + ox, pts[i][1] + oy);
+    }
+    if (closed) g.closePath();
+  });
+}
+
+// A crayon-and-pencil texture laid over the colors of each sprite.
+let crayon = null;
+function crayonPattern(g) {
+  if (!crayon) {
+    crayon = document.createElement('canvas');
+    crayon.width = crayon.height = 96;
+    const c = crayon.getContext('2d');
+    const r = seeded(77);
+    c.lineCap = 'round';
+    for (let i = 0; i < 260; i++) {
+      const x = r() * 96, y = r() * 96, len = 3 + r() * 7;
+      c.strokeStyle = r() < 0.55 ? `rgba(30,25,60,${0.05 + r() * 0.08})` : `rgba(255,252,240,${0.08 + r() * 0.12})`;
+      c.lineWidth = 0.6 + r() * 0.9;
+      c.beginPath(); c.moveTo(x, y); c.lineTo(x + len * 0.8, y - len * 0.6); c.stroke();
+    }
+  }
+  return g.createPattern(crayon, 'repeat');
+}
+function crayonOver(g, x, y, w, h) {
+  g.save();
+  g.globalCompositeOperation = 'source-atop';
+  g.fillStyle = crayonPattern(g);
+  g.fillRect(x, y, w, h);
+  g.restore();
+}
+
 // ---- Sprite cache ----
 let S = 1;
 const cache = new Map();
 export function setScale(s) { S = s; cache.clear(); }
 
+const hash = (str) => { let h = 7; for (const ch of str) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h % 10007; };
+
+// Each sprite is drawn once per boil frame and kept.
 function sprite(key, w, h, pad, draw) {
-  let c = cache.get(key);
+  const k = `${key}#${boil}`;
+  let c = cache.get(k);
   if (!c) {
     c = document.createElement('canvas');
     c.width = Math.ceil((w + 2 * pad) * S);
@@ -32,9 +205,10 @@ function sprite(key, w, h, pad, draw) {
     g.translate(pad, pad);
     g.lineJoin = 'round';
     g.lineCap = 'round';
-    draw(g);
+    draw(sketchy(g, hash(key) + boil * 101));
+    crayonOver(g, -pad, -pad, w + 2 * pad, h + 2 * pad);
     c.pad = pad; c.lw = w; c.lh = h;
-    cache.set(key, c);
+    cache.set(k, c);
   }
   return c;
 }
@@ -58,10 +232,10 @@ function rr(g, x, y, w, h, r) {
   r = Math.min(r, w / 2, h / 2);
   g.beginPath();
   g.moveTo(x + r, y);
-  g.arcTo(x + w, y, x + w, y + h, r);
-  g.arcTo(x + w, y + h, x, y + h, r);
-  g.arcTo(x, y + h, x, y, r);
-  g.arcTo(x, y, x + w, y, r);
+  g.lineTo(x + w - r, y); g.quadraticCurveTo(x + w, y, x + w, y + r);
+  g.lineTo(x + w, y + h - r); g.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  g.lineTo(x + r, y + h); g.quadraticCurveTo(x, y + h, x, y + h - r);
+  g.lineTo(x, y + r); g.quadraticCurveTo(x, y, x + r, y);
   g.closePath();
 }
 function ell(g, x, y, rx, ry, rot = 0) { g.beginPath(); g.ellipse(x, y, Math.max(0.1, rx), Math.max(0.1, ry), rot, 0, TAU); }
@@ -450,70 +624,77 @@ export function pickup(kind) {
 
 // ---- Grandma ----
 // Drawn every frame at her feet (x, y). facing: up | down | left | right.
-export function grandma(g, x, y, { facing = 'up', hop = 0, tilt = 0, shiver = 0, scale = 1 } = {}) {
-  const lift = Math.sin(Math.PI * hop) * 14;
-  const stretch = 1 + Math.sin(Math.PI * hop) * 0.08;
+// She toddles rather than hops: a small lift, a rock to one side, and one boot off the ground.
+export function grandma(g, x, y, { facing = 'up', hop = 0, step = 1, tilt = 0, shiver = 0, scale = 1 } = {}) {
+  const k = Math.sin(Math.PI * hop);
   g.save();
   g.translate(x, y);
-  g.lineJoin = 'round'; g.lineCap = 'round';
-  ell(g, 0, 0, 15 - lift * 0.3, 5 - lift * 0.1); paint(g, 'rgba(20,24,50,0.28)', null);
-  g.translate(shiver ? (Math.random() - 0.5) * shiver : 0, -lift);
-  g.rotate(tilt);
-  g.scale(scale / stretch, scale * stretch);
-  const back = facing === 'up';
-  const look = facing === 'left' ? -2 : facing === 'right' ? 2 : 0;
-  // boots
-  ell(g, -6, -3, 5, 3.5); paint(g, '#3b2b30', INK, 1.5);
-  ell(g, 6, -3, 5, 3.5); paint(g, '#3b2b30', INK, 1.5);
-  // handbag on her arm
-  if (!back || true) {
-    g.strokeStyle = INK; g.lineWidth = 1.5;
-    g.beginPath(); g.arc(16, -18, 4, Math.PI, 0); g.stroke();
-    rr(g, 11, -18, 11, 9, 3); paint(g, '#3f7f5a', INK, 1.5);
-  }
-  // coat
-  g.beginPath();
-  g.moveTo(-15, -6); g.quadraticCurveTo(-14, -26, -9, -31); g.lineTo(9, -31); g.quadraticCurveTo(14, -26, 15, -6);
-  g.quadraticCurveTo(0, -2, -15, -6); g.closePath();
-  paint(g, vgrad(g, -31, -4, C.coat, C.coatDark));
-  g.beginPath(); g.moveTo(-15, -6); g.quadraticCurveTo(0, -1, 15, -6); g.lineTo(15, -9); g.quadraticCurveTo(0, -4, -15, -9); g.closePath();
-  paint(g, '#f6f0e6', INK, 1.2);
-  if (!back) {
-    g.fillStyle = C.gold; for (const by of [-24, -17]) { circ(g, 0, by, 1.6); g.fill(); }
-  } else {
-    g.strokeStyle = 'rgba(0,0,0,0.25)'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(0, -28); g.lineTo(0, -9); g.stroke();
-  }
-  // mittens
-  circ(g, -15, -15, 3.8); paint(g, C.red, INK, 1.4);
-  circ(g, 12, -16, 3.8); paint(g, C.red, INK, 1.4);
-  // scarf
-  rr(g, -10, -33, 20, 6, 3); paint(g, C.red, INK, 1.4);
-  g.beginPath(); g.moveTo(back ? -4 : 4, -29); g.lineTo(back ? -8 : 8, -18); g.lineTo(back ? -3 : 3, -18); g.lineTo(back ? -1 : 1, -29); g.closePath();
-  paint(g, C.red, INK, 1.2);
-  // head
-  circ(g, 0, -40, 10); paint(g, C.skin, INK, 1.8);
-  if (back) {
-    g.beginPath(); g.arc(0, -40, 10.5, Math.PI * 0.85, Math.PI * 2.15); g.closePath(); paint(g, C.hair, INK, 1.6);
-    g.strokeStyle = 'rgba(150,150,170,0.6)'; g.lineWidth = 1;
-    for (const a of [-6, -2, 2, 6]) { g.beginPath(); g.moveTo(a, -49); g.quadraticCurveTo(a * 1.2, -42, a, -35); g.stroke(); }
-  } else {
-    g.beginPath(); g.arc(0, -41, 10.6, Math.PI * 1.02, Math.PI * 1.98); g.quadraticCurveTo(0, -44, -10.6, -42); g.closePath();
-    paint(g, C.hair, INK, 1.6);
-    ell(g, -10, -38, 3, 4); paint(g, C.hair, INK, 1.2);
-    ell(g, 10, -38, 3, 4); paint(g, C.hair, INK, 1.2);
-    circ(g, -6.5 + look, -35, 2.4); paint(g, 'rgba(240,120,130,0.45)', null);
-    circ(g, 6.5 + look, -35, 2.4); paint(g, 'rgba(240,120,130,0.45)', null);
-    g.strokeStyle = INK; g.lineWidth = 1.5;
-    for (const ex of [-4, 4]) { circ(g, ex + look, -39, 3.4); g.fillStyle = 'rgba(210,235,255,0.5)'; g.fill(); g.stroke(); }
-    g.beginPath(); g.moveTo(-0.8 + look, -39.5); g.lineTo(0.8 + look, -39.5); g.stroke();
-    circ(g, -4 + look * 1.3, -39, 1.1); paint(g, INK, null);
-    circ(g, 4 + look * 1.3, -39, 1.1); paint(g, INK, null);
-    g.beginPath(); g.arc(look, -34.5, 2.5, 0.2, Math.PI - 0.2); g.lineWidth = 1.3; g.stroke();
-  }
-  // bun
-  circ(g, 0, -52, 5.5); paint(g, C.hair, INK, 1.6);
-  g.strokeStyle = C.red; g.lineWidth = 1.5; g.beginPath(); g.moveTo(-4, -50); g.lineTo(5, -55); g.stroke();
+  ell(g, 0, 0, 15 * scale, 5 * scale); g.fillStyle = 'rgba(20,24,50,0.28)'; g.fill();
+  g.translate(shiver ? (Math.random() - 0.5) * shiver : 0, -k * 4);
+  g.rotate(tilt + k * 0.13 * step);
+  g.scale(scale, scale * (1 + k * 0.03));
+  blit(g, grandmaPose(facing, Math.round(k * 4) / 4, step), -24, -62);
   g.restore();
+}
+
+// Her body in one pose (k = how far through a step), drawn once per boil frame and reused.
+function grandmaPose(facing, k, step) {
+  return sprite(`gran-${facing}-${k}-${step}`, 48, 66, 4, (g) => {
+    g.translate(24, 62);
+    const back = facing === 'up';
+    const look = facing === 'left' ? -2 : facing === 'right' ? 2 : 0;
+    // boots: the leading one lifts while she steps
+    ell(g, -6, -3 - (step < 0 ? k * 4 : 0), 5, 3.5); paint(g, '#3b2b30', INK, 1.5);
+    ell(g, 6, -3 - (step > 0 ? k * 4 : 0), 5, 3.5); paint(g, '#3b2b30', INK, 1.5);
+    // handbag on her arm, swinging a little as she walks
+    g.save(); g.translate(16, -22); g.rotate(-k * 0.35 * step);
+    g.strokeStyle = INK; g.lineWidth = 1.5;
+    g.beginPath(); g.arc(0, 4, 4, Math.PI, 0); g.stroke();
+    rr(g, -5, 4, 11, 9, 3); paint(g, '#3f7f5a', INK, 1.5);
+    g.restore();
+    // coat
+    g.beginPath();
+    g.moveTo(-15, -6); g.quadraticCurveTo(-14, -26, -9, -31); g.lineTo(9, -31); g.quadraticCurveTo(14, -26, 15, -6);
+    g.quadraticCurveTo(0, -2, -15, -6); g.closePath();
+    paint(g, vgrad(g, -31, -4, C.coat, C.coatDark));
+    g.beginPath(); g.moveTo(-15, -6); g.quadraticCurveTo(0, -1, 15, -6); g.lineTo(15, -9); g.quadraticCurveTo(0, -4, -15, -9); g.closePath();
+    paint(g, '#f6f0e6', INK, 1.2);
+    if (!back) {
+      g.fillStyle = C.gold; for (const by of [-24, -17]) { circ(g, 0, by, 1.6); g.fill(); }
+    } else {
+      g.strokeStyle = 'rgba(0,0,0,0.25)'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(0, -28); g.lineTo(0, -9); g.stroke();
+    }
+    // mittens
+    circ(g, -15, -15, 3.8); paint(g, C.red, INK, 1.4);
+    circ(g, 12, -16, 3.8); paint(g, C.red, INK, 1.4);
+    // scarf
+    rr(g, -10, -33, 20, 6, 3); paint(g, C.red, INK, 1.4);
+    g.beginPath(); g.moveTo(back ? -4 : 4, -29); g.lineTo(back ? -8 : 8, -18); g.lineTo(back ? -3 : 3, -18); g.lineTo(back ? -1 : 1, -29); g.closePath();
+    paint(g, C.red, INK, 1.2);
+    // head
+    circ(g, 0, -40, 10); paint(g, C.skin, INK, 1.8);
+    if (back) {
+      g.beginPath(); g.arc(0, -40, 10.5, Math.PI * 0.85, Math.PI * 2.15); g.closePath(); paint(g, C.hair, INK, 1.6);
+      g.strokeStyle = 'rgba(150,150,170,0.6)'; g.lineWidth = 1;
+      for (const a of [-6, -2, 2, 6]) { g.beginPath(); g.moveTo(a, -49); g.quadraticCurveTo(a * 1.2, -42, a, -35); g.stroke(); }
+    } else {
+      g.beginPath(); g.arc(0, -41, 10.6, Math.PI * 1.02, Math.PI * 1.98); g.quadraticCurveTo(0, -44, -10.6, -42); g.closePath();
+      paint(g, C.hair, INK, 1.6);
+      ell(g, -10, -38, 3, 4); paint(g, C.hair, INK, 1.2);
+      ell(g, 10, -38, 3, 4); paint(g, C.hair, INK, 1.2);
+      circ(g, -6.5 + look, -35, 2.4); paint(g, 'rgba(240,120,130,0.45)', null);
+      circ(g, 6.5 + look, -35, 2.4); paint(g, 'rgba(240,120,130,0.45)', null);
+      g.strokeStyle = INK; g.lineWidth = 1.5;
+      for (const ex of [-4, 4]) { circ(g, ex + look, -39, 3.4); g.fillStyle = 'rgba(210,235,255,0.5)'; g.fill(); g.stroke(); }
+      g.beginPath(); g.moveTo(-0.8 + look, -39.5); g.lineTo(0.8 + look, -39.5); g.stroke();
+      circ(g, -4 + look * 1.3, -39, 1.1); paint(g, INK, null);
+      circ(g, 4 + look * 1.3, -39, 1.1); paint(g, INK, null);
+      g.beginPath(); g.arc(look, -34.5, 2.5, 0.2, Math.PI - 0.2); g.lineWidth = 1.3; g.stroke();
+    }
+    // bun
+    circ(g, 0, -52, 5.5); paint(g, C.hair, INK, 1.6);
+    g.strokeStyle = C.red; g.lineWidth = 1.5; g.beginPath(); g.moveTo(-4, -50); g.lineTo(5, -55); g.stroke();
+  });
 }
 
 // Grandma's face, for the lives counter.
@@ -531,6 +712,7 @@ export function headIcon(size = 28) {
 
 // ---- What happens to Grandma ----
 export function pancake(g, x, y, t, by) {
+  g = sketchy(g, 11 + boil * 31);
   g.save(); g.translate(x, y - 6);
   g.lineJoin = 'round';
   const spread = Math.min(1, t * 6);
@@ -565,6 +747,7 @@ export function pancake(g, x, y, t, by) {
 }
 
 export function iceCube(g, x, y, t) {
+  g = sketchy(g, 13 + boil * 31);
   const bob = Math.sin(t * 4) * 2;
   g.save(); g.translate(x, y - 18 + bob);
   g.rotate(Math.sin(t * 2.5) * 0.06);
@@ -582,6 +765,7 @@ export function iceCube(g, x, y, t) {
 }
 
 export function snowman(g, x, y, t) {
+  g = sketchy(g, 17 + boil * 31);
   const grow = Math.min(1, t * 3);
   g.save(); g.translate(x, y); g.scale(grow, grow);
   g.lineJoin = 'round';
@@ -604,6 +788,7 @@ export function snowman(g, x, y, t) {
 // ---- Scenery ----
 // The strip at the top: night sky, hills, and Grandma's cottage.
 export function drawSkyBand(g, W, H, seed = 1) {
+  g = sketchy(g, 23 + seed);
   const r = seeded(seed);
   g.fillStyle = vgrad(g, 0, H, '#141b3f', '#34407a');
   g.fillRect(0, 0, W, H);
@@ -626,67 +811,73 @@ export function drawSkyBand(g, W, H, seed = 1) {
   for (const [x, s] of [[30, 1.1], [72, 0.8], [112, 0.95], [430, 0.9], [470, 1.15], [515, 0.8]]) pine(g, x, H - 6, s);
 }
 
-// The cottage, drawn every frame so its lights twinkle and the chimney smokes.
+// The cottage: the house itself is a cached sprite; smoke and twinkling lights are drawn live.
+const BULBS = ['#ff6a5a', '#ffd25a', '#6ad08a', '#6ab4ff'];
+const bulbAt = (i) => [-110 + (220 * i) / 12, -40 + (i % 2 ? 4 : 0)];   // relative to (cx, base)
+
 export function cottage(g, cx, base, time) {
   g.save();
-  g.lineJoin = 'round';
-  const L = cx - 100, R = cx + 100, top = base - 50;
-  // chimney + smoke
-  rr(g, L + 30, top - 42, 18, 34, 2); paint(g, '#9a4a3c');
-  g.fillStyle = 'rgba(230,236,250,0.5)';
+  g.fillStyle = 'rgb(230,236,250)';
   for (let i = 0; i < 4; i++) {
     const k = (time * 0.35 + i / 4) % 1;
-    circ(g, L + 39 + Math.sin(k * 6 + i) * 6 + k * 14, top - 46 - k * 40, 4 + k * 9);
-    g.globalAlpha = 0.6 * (1 - k); g.fill();
+    circ(g, cx - 61 + Math.sin(k * 6 + i) * 6 + k * 14, base - 96 - k * 40, 4 + k * 9);
+    g.globalAlpha = 0.3 * (1 - k); g.fill();
   }
-  g.globalAlpha = 1;
-  // walls
-  rr(g, L, top, 200, 50, 3); paint(g, vgrad(g, top, base, '#efe2c6', '#d8c49f'));
-  g.strokeStyle = 'rgba(120,80,50,0.5)'; g.lineWidth = 2;
-  for (const x of [L + 66, R - 66]) { g.beginPath(); g.moveTo(x, top + 2); g.lineTo(x, base - 1); g.stroke(); }
-  // windows
-  for (const wx of [L + 18, R - 52]) {
-    glow(g, wx + 17, top + 24, 34, 'rgba(255,200,110,0.45)');
-    rr(g, wx, top + 10, 34, 26, 3); paint(g, vgrad(g, top + 10, top + 36, '#ffe9a8', '#f6b860'), INK, 2);
-    g.strokeStyle = '#7a4a2a'; g.lineWidth = 2;
-    g.beginPath(); g.moveTo(wx + 17, top + 10); g.lineTo(wx + 17, top + 36); g.moveTo(wx, top + 23); g.lineTo(wx + 34, top + 23); g.stroke();
-    rr(g, wx - 3, top + 35, 40, 5, 2); paint(g, C.snow, INK, 1.2);
-  }
-  // door with wreath and lamp
-  glow(g, cx, top + 26, 46, 'rgba(255,190,100,0.35)');
-  g.beginPath(); g.moveTo(cx - 15, base); g.lineTo(cx - 15, top + 14); g.quadraticCurveTo(cx, top + 2, cx + 15, top + 14); g.lineTo(cx + 15, base); g.closePath();
-  paint(g, vgrad(g, top + 6, base, '#c8453a', '#94302a'));
-  circ(g, cx + 9, top + 32, 1.8); paint(g, C.gold, null);
-  g.strokeStyle = C.green; g.lineWidth = 4.5; g.beginPath(); g.arc(cx, top + 20, 6, 0, TAU); g.stroke();
-  g.fillStyle = C.red; for (let i = 0; i < 5; i++) { const a = (i / 5) * TAU; circ(g, cx + Math.cos(a) * 6, top + 20 + Math.sin(a) * 6, 1.3); g.fill(); }
-  // roof with thick snow
-  g.beginPath(); g.moveTo(L - 16, top + 4); g.lineTo(cx, top - 52); g.lineTo(R + 16, top + 4); g.closePath();
-  paint(g, vgrad(g, top - 52, top + 4, '#4a5f86', '#33456b'));
-  g.beginPath(); g.moveTo(L - 20, top + 6);
-  g.lineTo(cx, top - 56); g.lineTo(R + 20, top + 6);
-  for (let x = R + 20; x >= L - 20; x -= 14) g.lineTo(x, top + 2 + ((x / 14) % 2 ? 5 : 1));
-  g.closePath();
-  g.save(); g.clip();
-  g.fillStyle = vgrad(g, top - 56, top + 6, '#ffffff', '#dbe4f4'); g.fillRect(L - 30, top - 60, 260, 70);
-  g.fillStyle = 'rgba(74,95,134,0.9)';
-  g.beginPath(); g.moveTo(L - 4, top + 6); g.lineTo(cx, top - 34); g.lineTo(R + 4, top + 6); g.closePath(); g.fill();
   g.restore();
-  g.strokeStyle = INK; g.lineWidth = 2;
-  g.beginPath(); g.moveTo(L - 20, top + 6); g.lineTo(cx, top - 56); g.lineTo(R + 20, top + 6); g.stroke();
-  // twinkling string lights along the eave
-  const bulbs = ['#ff6a5a', '#ffd25a', '#6ad08a', '#6ab4ff'];
-  g.strokeStyle = 'rgba(40,40,60,0.8)'; g.lineWidth = 1;
-  g.beginPath();
-  for (let i = 0; i <= 12; i++) { const x = L - 10 + (220 * i) / 12; g.lineTo(x, top + 8 + (i % 2 ? 4 : 0)); }
-  g.stroke();
+  blit(g, cottageSprite(), cx - 125, base - 112);
   for (let i = 0; i <= 12; i++) {
-    const x = L - 10 + (220 * i) / 12, y = top + 10 + (i % 2 ? 4 : 0);
+    const [bx, by] = bulbAt(i);
     const on = (Math.sin(time * 3 + i * 1.7) + 1) / 2;
-    const col = bulbs[i % 4];
-    glow(g, x, y, 8, col, 0.3 + on * 0.5);
-    ell(g, x, y, 2.4, 3.2); paint(g, col, null);
+    glow(g, cx + bx, base + by, 9, BULBS[i % 4], 0.2 + on * 0.6);
   }
-  g.restore();
+}
+
+function cottageSprite() {
+  return sprite('cottage', 250, 114, 12, (g) => {
+    g.translate(125, 112);
+    const cx = 0, base = 0;
+    const L = cx - 100, R = cx + 100, top = base - 50;
+    rr(g, L + 30, top - 42, 18, 34, 2); paint(g, '#9a4a3c');
+    // walls
+    rr(g, L, top, 200, 50, 3); paint(g, vgrad(g, top, base, '#efe2c6', '#d8c49f'));
+    g.strokeStyle = 'rgba(120,80,50,0.5)'; g.lineWidth = 2;
+    for (const x of [L + 66, R - 66]) { g.beginPath(); g.moveTo(x, top + 2); g.lineTo(x, base - 1); g.stroke(); }
+    // windows
+    for (const wx of [L + 18, R - 52]) {
+      glow(g, wx + 17, top + 24, 34, 'rgba(255,200,110,0.45)');
+      rr(g, wx, top + 10, 34, 26, 3); paint(g, vgrad(g, top + 10, top + 36, '#ffe9a8', '#f6b860'), INK, 2);
+      g.strokeStyle = '#7a4a2a'; g.lineWidth = 2;
+      g.beginPath(); g.moveTo(wx + 17, top + 10); g.lineTo(wx + 17, top + 36); g.moveTo(wx, top + 23); g.lineTo(wx + 34, top + 23); g.stroke();
+      rr(g, wx - 3, top + 35, 40, 5, 2); paint(g, C.snow, INK, 1.2);
+    }
+    // door with wreath and lamp
+    glow(g, cx, top + 26, 46, 'rgba(255,190,100,0.35)');
+    g.beginPath(); g.moveTo(cx - 15, base); g.lineTo(cx - 15, top + 14); g.quadraticCurveTo(cx, top + 2, cx + 15, top + 14); g.lineTo(cx + 15, base); g.closePath();
+    paint(g, vgrad(g, top + 6, base, '#c8453a', '#94302a'));
+    circ(g, cx + 9, top + 32, 1.8); paint(g, C.gold, null);
+    g.strokeStyle = C.green; g.lineWidth = 4.5; g.beginPath(); g.arc(cx, top + 20, 6, 0, TAU); g.stroke();
+    g.fillStyle = C.red; for (let i = 0; i < 5; i++) { const a = (i / 5) * TAU; circ(g, cx + Math.cos(a) * 6, top + 20 + Math.sin(a) * 6, 1.3); g.fill(); }
+    // roof with thick snow
+    g.beginPath(); g.moveTo(L - 16, top + 4); g.lineTo(cx, top - 52); g.lineTo(R + 16, top + 4); g.closePath();
+    paint(g, vgrad(g, top - 52, top + 4, '#4a5f86', '#33456b'));
+    g.beginPath(); g.moveTo(L - 20, top + 6);
+    g.lineTo(cx, top - 56); g.lineTo(R + 20, top + 6);
+    for (let x = R + 20; x >= L - 20; x -= 14) g.lineTo(x, top + 2 + (Math.round(x / 14) % 2 ? 5 : 1));
+    g.closePath();
+    g.save(); g.clip();
+    g.fillStyle = vgrad(g, top - 56, top + 6, '#ffffff', '#dbe4f4'); g.fillRect(L - 30, top - 60, 260, 70);
+    g.fillStyle = 'rgba(74,95,134,0.9)';
+    g.beginPath(); g.moveTo(L - 4, top + 6); g.lineTo(cx, top - 34); g.lineTo(R + 4, top + 6); g.closePath(); g.fill();
+    g.restore();
+    g.strokeStyle = INK; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(L - 20, top + 6); g.lineTo(cx, top - 56); g.lineTo(R + 20, top + 6); g.stroke();
+    // string lights along the eave
+    g.strokeStyle = 'rgba(40,40,60,0.8)'; g.lineWidth = 1;
+    g.beginPath();
+    for (let i = 0; i <= 12; i++) { const [bx, by] = bulbAt(i); g.lineTo(bx, by - 2); }
+    g.stroke();
+    for (let i = 0; i <= 12; i++) { const [bx, by] = bulbAt(i); ell(g, bx, by, 2.4, 3.2); paint(g, BULBS[i % 4], INK, 0.8); }
+  });
 }
 
 function pine(g, x, y, s) {
@@ -704,6 +895,7 @@ function pine(g, x, y, s) {
 
 // One row of ground. rowsAround tells it what's above and below so edges can blend.
 export function drawRow(g, type, y, W, above, below, seed) {
+  g = sketchy(g, seed * 3 + 1, 2);
   const r = seeded(seed);
   const T = TILE;
   if (type === 'walk' || type === 'yard') {
@@ -716,6 +908,7 @@ export function drawRow(g, type, y, W, above, below, seed) {
     }
     g.fillStyle = 'rgba(255,255,255,0.8)';
     for (let i = 0; i < 10; i++) { ell(g, r() * W, y + r() * T, 6 + r() * 10, 2 + r() * 2); g.fill(); }
+    hatch(g, r, y, W, 4, 'rgba(140,160,205,0.45)');
     if (type === 'walk') {
       for (const x of [r() * 120 + 30, W - 40 - r() * 120]) glow(g, x, y + T / 2, 60, 'rgba(255,205,120,0.22)');
     } else {
@@ -750,6 +943,7 @@ export function drawRow(g, type, y, W, above, below, seed) {
       g.beginPath(); g.moveTo(0, yy); g.bezierCurveTo(W * 0.3, yy - 4, W * 0.6, yy + 4, W, yy); g.stroke();
       g.beginPath(); g.moveTo(0, yy + 8); g.bezierCurveTo(W * 0.3, yy + 4, W * 0.6, yy + 12, W, yy + 8); g.stroke();
     }
+    hatch(g, r, y, W, 3, 'rgba(130,150,200,0.4)');
   } else if (type === 'rink') {
     g.fillStyle = vgrad(g, y, y + T, '#d4ecf8', '#b5d8ee'); g.fillRect(0, y, W, T);
     g.strokeStyle = 'rgba(255,255,255,0.75)'; g.lineWidth = 1.2;
@@ -778,6 +972,21 @@ export function drawRow(g, type, y, W, above, below, seed) {
   }
 }
 
+// Little clusters of pencil hatching, the way you'd shade snow in a picture book.
+function hatch(g, r, y, W, clusters, color) {
+  g.save();
+  g.strokeStyle = color;
+  g.lineWidth = 1.1;
+  for (let c = 0; c < clusters; c++) {
+    const cx = r() * W, cy = y + 12 + r() * 36, n = 4 + Math.floor(r() * 4);
+    for (let i = 0; i < n; i++) {
+      const x = cx + i * 4;
+      g.beginPath(); g.moveTo(x, cy + 5); g.lineTo(x + 6, cy - 4); g.stroke();
+    }
+  }
+  g.restore();
+}
+
 function candyCane(g, x, y) {
   g.save(); g.translate(x, y);
   g.lineCap = 'round';
@@ -790,11 +999,11 @@ function candyCane(g, x, y) {
 
 // Paper grain and a soft vignette laid over everything for the storybook feel.
 export function drawGrain(g, W, H) {
-  const r = seeded(42);
-  for (let i = 0; i < 2600; i++) {
-    g.fillStyle = r() < 0.5 ? 'rgba(255,250,235,0.05)' : 'rgba(40,30,60,0.05)';
-    g.fillRect(r() * W, r() * H, 1 + r() * 2, 1 + r() * 2);
-  }
+  g.save();
+  g.globalAlpha = 0.6;
+  g.fillStyle = crayonPattern(g);
+  g.fillRect(0, 0, W, H);
+  g.restore();
   const v = g.createRadialGradient(W / 2, H * 0.55, H * 0.3, W / 2, H * 0.55, H * 0.8);
   v.addColorStop(0, 'rgba(20,20,60,0)');
   v.addColorStop(1, 'rgba(20,20,60,0.35)');
