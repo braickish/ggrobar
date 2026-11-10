@@ -71,6 +71,7 @@ export function buildRoute(sections, night = 0) {
       endRow: rows.length - 1,
       coldTime: Math.round(sec.rows.length * 2.6 + 10),
       santaEvery: Math.max(3.5, sec.santaEvery * (1 - 0.1 * night)),
+      raccoonsEvery: sec.raccoonsEvery ?? 0,
       presentsEvery: sec.presentsEvery ? Math.max(1.6, sec.presentsEvery * (1 - 0.1 * night)) : 0,
     });
   });
@@ -100,6 +101,7 @@ export function widthOf(def) {
 }
 
 // Give every moving row its movers, spread evenly round the loop.
+// (A road row with no kind is an empty lane: the quiet side of a neighborhood street.)
 export function buildLanes(rows, rand = Math.random) {
   return rows.map((def, row) => {
     const lane = { ...def, row, objs: [], v: 0, moving: 1, clock: rand() * 10, accel: KIND_ACCEL[def.kind] ?? 2.5 };
@@ -169,6 +171,21 @@ export const HEAD_ON_DEPTH = 0.35;
 export function hitKind(o, dir, x, half = GRANDMA_HALF) {
   const depth = dir > 0 ? (o.x + o.w - 0.12) - (x - half) : (x + half) - (o.x + 0.12);
   return depth < HEAD_ON_DEPTH ? 'front' : 'side';
+}
+
+// Raccoons: a trash can on a lawn rattles (eyes peeking out) for RACCOON_WARN seconds, tips over, and a
+// raccoon dashes out along the row. Pick an upright can just ahead of Grandma, if there is one.
+export const RACCOON_WARN = 1.2;
+export const RACCOON_SPEED = 5;               // tiles per second
+export const RACCOON_W = 0.9;
+export function pickRaccoonCan(route, gRow, tipped, rand = Math.random) {
+  const cans = [];
+  for (let row = gRow; row <= gRow + 4; row++) {
+    const def = route.rows[row];
+    if (!def || !def.deco) continue;
+    [...def.deco].forEach((ch, col) => { if (ch === 'C' && !tipped.has(row * 100 + col)) cans.push({ row, col }); });
+  }
+  return cans.length ? cans[Math.floor(rand() * cans.length)] : null;
 }
 
 // Has something in this lane run over the present sitting in column col?

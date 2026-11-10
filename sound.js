@@ -178,6 +178,14 @@ export const Sound = (() => {
       tone(150, 0.18, { to: 70, vol: 0.12, type: 'triangle' });
       bell(1760, 0.05, 0.02, 0.25);
     },
+    // A raccoon rummaging in a trash can, then the can going over.
+    rattle() {
+      for (let i = 0; i < 7; i++) noise(0.05, { vol: 0.07, filter: 'bandpass', freq: rand(2500, 4000), q: 3, at: i * 0.15 + rand(0, 0.05) });
+    },
+    clatter() {
+      for (let i = 0; i < 5; i++) noise(0.09, { vol: 0.12, filter: 'bandpass', freq: rand(1800, 3500), q: 2, at: i * 0.06 });
+      for (let i = 0; i < 3; i++) tone(rand(900, 1300), 0.05, { to: rand(1400, 1800), vol: 0.035, at: 0.25 + i * 0.07, type: 'square' });
+    },
     nog() { for (let i = 0; i < 3; i++) tone(260 - i * 30, 0.1, { to: 180 - i * 20, vol: 0.08, at: i * 0.12, type: 'triangle' }); },
     home() {
       // A door chime, then a warm chord.

@@ -19,10 +19,14 @@ and a regularly swooping sleigh. Built for a parent and their kids; keep it appr
 - Neighborhood (first section, "Holly Lane"): `lawn` rows have `deco: 'S..B.T...'` (snowman / lit bush / little tree,
   blocking like trees, drawn by `Art.yardDeco`); `sidewalk` rows have `ebike`, `carolers` (stop to sing) and `dogwalker`
   (stops to sniff); e-bikes ride the `road` rows. The user wanted it to feel like a real neighborhood: blocks of yard /
-  sidewalk / street / sidewalk (never two sidewalks in a row, tested), quiet at first, then Main Street at the top.
+  sidewalk / two-lane street (a `road` row with no `kind` is an empty lane) / sidewalk (never two sidewalks in a row, tested), quiet at first, then Main Street at the top.
   Sections with `presentsEvery` drop presents near her (`pickDropSpot`): shadow + red ring for `DROP_WARN` s, then it
   lands and squashes her if she's on that tile. A landed present is worth `DROP_PTS` if she steps on it, vanishes if a
   mover drives over its tile (`presentRunOver`), and fades after `DROP_STAY` s (blinking for the last 2).
+  Lawn `C` is a trash can (the user found the lit bushes `B` too busy, so they're unused but still drawable). Sections
+  with `raccoonsEvery` pick an upright can just ahead of her (`pickRaccoonCan`): it rattles with eyes peeking out for
+  `RACCOON_WARN` s, tips over for good (`tipped`, reset each night), and a raccoon dashes along the row at
+  `RACCOON_SPEED`, splatting her ("Trash panda!") and taking any landed present it passes.
 - Forest: `forest` rows have `trees: 'T..TT.T.T'` (blocking tiles, drawn as tall still sprites); `trail` rows have
   animals. Animal personalities are lane-wide stop/go cycles (`stops`, `KIND_ACCEL`) so spacing stays even.
   `routeIsWalkable` (BFS) and the gap tests in `tests/logic.test.mjs` guard against impossible layouts.
@@ -49,7 +53,8 @@ and a regularly swooping sleigh. Built for a parent and their kids; keep it appr
   scaled row images per frame, or one scaled strip, halved the frame rate. Tree/lamppost sprites are kept
   tight (`RISE`) because 30 trees can be on screen. `Art.warmTasks()` pre-builds every sprite a few ms per
   frame after load. Sleigh bells were trimmed to ~22 audio nodes for the same reason.
-- Grandma toddles (`HOP_TIME` 0.17 s, eased, 4-unit lift, rocks side to side, alternating foot) at 0.8 scale
+- Grandma toddles (`HOP_TIME` 0.17 s, eased, 4-unit lift, rocks side to side, alternating foot) at `GRAN_SCALE` 1.05
+  (the user found 0.8 too small next to the carolers; she's now a little shorter than the adults)
   with her feet 10 units above the lane's bottom so she sits in the lane like the vehicles.
 - Eggnog stacks: `nog` counts glasses, points ×(nog + 1), kept through checkpoints until she loses a life (reset each
   night). `tipsy` seconds (`nogTime`, longer per glass) make forward steps drift sideways (`nogDrift`, higher per glass).
@@ -62,4 +67,4 @@ and a regularly swooping sleigh. Built for a parent and their kids; keep it appr
   module with a new one (e.g. old `stages.js` without `SECTIONS`), which stops the game loading: a blank board.
   index.html also shows a "reload" card if the game hasn't started 4 s after load.
 - Ideas for later: leaderboard (same Supabase pattern as Witch's Brew; a fixed-length walk suits it), the kids'
-  own drawings, more sections, a "cocoa" extra life, raccoons in the neighborhood.
+  own drawings, more sections, a "cocoa" extra life.

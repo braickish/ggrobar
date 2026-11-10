@@ -1,7 +1,7 @@
-import { SECTIONS } from './stages.js?v=202611102238';
-import * as L from './logic.js?v=202611102238';
-import * as Art from './art.js?v=202611102238';
-import { Sound } from './sound.js?v=202611102238';
+import { SECTIONS } from './stages.js?v=202611102250';
+import * as L from './logic.js?v=202611102250';
+import * as Art from './art.js?v=202611102250';
+import { Sound } from './sound.js?v=202611102250';
 
 const T = Art.TILE;
 const W = L.COLS * T;                           // 540
@@ -10,7 +10,7 @@ const SKY = 130;                                // the night sky and cottage abo
 const HOP_TIME = 0.17;                          // one toddling step
 const SPIN_TIME = 0.5;                          // the twirl when she bounces off something
 const STUMBLE_TIME = 0.34;                      // ...then a slow, wobbly step backwards
-const GRAN_SCALE = 0.8;
+const GRAN_SCALE = 1.05;                       // about as tall as the carolers and dog walkers (a bit shorter)
 const GRAN_FROM_BOTTOM = 3.5;                   // the camera keeps her about this many rows up the screen
 const DEATH_TIME = 1.7;
 const HOME_TIME = 2.6;
@@ -52,6 +52,9 @@ let nog = 0;                  // glasses of eggnog since she last lost a life: p
 let tipsy = 0;                // seconds of wobbling left
 let drops = [];               // presents falling out of the sky
 let dropNext = 3;
+let coon = null;              // a raccoon: { row, col, phase: 'rattle' | 'run', t, x, dir }
+let coonNext = 4;
+let tipped = new Set();       // trash cans knocked over (row * 100 + col)
 let maxRow = 0;
 let pickups = [];
 let floaters = [];
@@ -86,6 +89,7 @@ function newGame() {
 
 function startNight() {
   nog = 0;
+  tipped = new Set();
   route = L.buildRoute(SECTIONS, night);
   lanes = L.buildLanes(route.rows);
   reached = 0;
@@ -112,6 +116,8 @@ function respawn() {
   tipsy = 0;
   drops = [];
   dropNext = 4;
+  coon = null;
+  coonNext = 3;
   maxRow = Math.max(maxRow, row);
   death = null;
   cam = Math.min(cam, camFor(row));
@@ -137,7 +143,7 @@ function setState(s) {
 const HIT_WORDS = {
   car: 'Splat!', plow: 'Plowed!', van: 'Splat!', sled: 'Wheee… oof!', skater: 'Whoops!',
   bunny: 'Bunny bonk!', deer: 'Oh deer!', moose: 'Moose on the loose!', fox: 'Outfoxed!',
-  ebike: 'Ding ding… oof!', carolers: 'Fa-la-la-flat!', dogwalker: 'Tangled in the leash!', present: 'Special delivery!',
+  raccoon: 'Trash panda!', ebike: 'Ding ding… oof!', carolers: 'Fa-la-la-flat!', dogwalker: 'Tangled in the leash!', present: 'Special delivery!',
 };
 
 function loseLife(kind, by) {
@@ -390,6 +396,7 @@ function update(dt) {
     }
     if (state === 'playing' && gran.hop >= 1 && queued) { const d = queued; queued = null; hop(d); }
     if (state === 'playing') updateDrops(dt);
+    if (state === 'playing') updateRaccoon(dt);
     if (state === 'playing') checkGround(dt);
     if (state === 'playing' && cold <= 0) loseLife('freeze');
     if (gran.spinT > 0) gran.spinT = Math.max(0, gran.spinT - dt);
@@ -543,6 +550,53 @@ function drawDrops(landed) {
   }
 }
 
+// ---- Raccoons in the trash cans (sections with raccoonsEvery) ----
+function updateRaccoon(dt) {
+  const sec = route.sections[L.sectionOf(route, gran.row)];
+  if (!coon) {
+    if (!sec.raccoonsEvery) return;
+    coonNext -= dt;
+    if (coonNext > 0) return;
+    coonNext = sec.raccoonsEvery * rand(0.7, 1.3);
+    const can = L.pickRaccoonCan(route, gran.row, tipped);
+    if (!can) { coonNext = 1.5; return; }
+    coon = { ...can, phase: 'rattle', t: 0, dir: can.col + 0.5 < currentX() ? 1 : -1 };
+    if (Math.random() < 0.35) coon.dir = -coon.dir;
+    Sound.rattle();
+    return;
+  }
+  coon.t += dt;
+  if (coon.phase === 'rattle') {
+    if (coon.t >= L.RACCOON_WARN) {
+      tipped.add(coon.row * 100 + coon.col);
+      coon.phase = 'run';
+      coon.x = coon.col + 0.5 - L.RACCOON_W / 2;
+      Sound.clatter();
+      const cx = (coon.col + 0.5) * T, cy = rowTop(coon.row) + T - 12;
+      for (let i = 0; i < 8; i++) particles.push({ x: cx + rand(-16, 16), y: cy, vx: rand(-2, 2), vy: rand(-2, -0.5), life: rand(0.3, 0.6), t: 0, c: '#ffffff', r: rand(1.5, 3) });
+    }
+    return;
+  }
+  coon.x += coon.dir * L.RACCOON_SPEED * dt;
+  // it grabs any present it runs past
+  for (const d of drops) {
+    if (d.landed && !d.gone && d.row === coon.row && Math.abs(d.col + 0.5 - (coon.x + L.RACCOON_W / 2)) < 0.4) {
+      d.gone = true; poof(d);
+      floater((d.col + 0.5) * T, rowTop(d.row) - 4, 'Mine!', '#ffffff', 18);
+    }
+  }
+  drops = drops.filter((d) => !d.gone);
+  if (state === 'playing' && !invincible && currentRow() === coon.row && Math.abs(currentX() - (coon.x + L.RACCOON_W / 2)) < L.GRANDMA_HALF + 0.3) {
+    loseLife('squash', 'raccoon');
+  }
+  if (coon.x > L.COLS + 1 || coon.x + L.RACCOON_W < -1) coon = null;
+}
+
+function drawRaccoon(row) {
+  if (!coon || coon.row !== row || coon.phase !== 'run') return;
+  Art.blit(ctx, Art.raccoon(Math.floor(time * 12) % 2), coon.x * T, rowTop(row) - Math.abs(Math.sin(time * 18)) * 3, coon.dir < 0);
+}
+
 // ---- Effects ----
 function floater(x, y, text, color, size = 20, delay = 0) {
   floaters.push({ x: clamp(x, 80, W - 80), y, text, color, size, t: -delay });
@@ -608,6 +662,7 @@ function paintRow(row) {
   g.save();
   g.beginPath(); g.rect(0, 0, W, T); g.clip();
   g.lineJoin = 'round'; g.lineCap = 'round';
+  g.fillStyle = '#dfe6f3'; g.fillRect(0, 0, W, T);     // snow under the wobbly edges, so no dark slivers show
   const def = route.rows[row];
   Art.drawRow(g, def, 0, W, route.rows[row + 1]?.type ?? 'sky', route.rows[row - 1]?.type ?? 'none', row + 1);
   g.restore();
@@ -704,7 +759,9 @@ function draw() {
     const def = route.rows[row];
     if (def.blocked) {
       for (const col of def.blocked) {
-        const pic = def.deco ? Art.yardDeco(def.deco[col], (col + row) % 3) : Art.tree((col + row) % 3);
+        const ch = def.deco?.[col];
+        if (ch === 'C') { drawCan(row, col); continue; }
+        const pic = def.deco ? Art.yardDeco(ch, (col + row) % 3) : Art.tree((col + row) % 3);
         Art.blit(ctx, pic, col * T, rowTop(row) - Art.RISE);
       }
     }
@@ -713,6 +770,7 @@ function draw() {
       Art.blit(ctx, Art.lamppost(), W - 24, rowTop(row) - Art.RISE);
     }
     drawLane(lanes[row]);
+    drawRaccoon(row);
     if (row === gRow) drawGrandma(shake);
     if (death && death.row === row) drawDeath();
   }
@@ -817,6 +875,24 @@ function drawLane(lane) {
   }
 }
 
+// A trash can: upright, rattling with eyes peeking out, or knocked over.
+function drawCan(row, col) {
+  const x = col * T, y = rowTop(row) - Art.RISE;
+  if (tipped.has(row * 100 + col)) { Art.blit(ctx, Art.trashTipped(), x, y); return; }
+  if (coon && coon.phase === 'rattle' && coon.row === row && coon.col === col) {
+    const k = coon.t / L.RACCOON_WARN;
+    const cx = x + T / 2, base = rowTop(row) + T - 8;
+    ctx.save();
+    ctx.translate(cx, base); ctx.rotate(Math.sin(time * 40) * 0.08 * (0.4 + k)); ctx.translate(-cx, -base);
+    Art.blit(ctx, Art.trashCan(), x, y);
+    // the lid lifts and eyes peek out
+    if (Math.sin(time * 9) > 0) Art.blit(ctx, Art.trashEyes(), cx - 12, rowTop(row) + 18 - 4 * k);
+    ctx.restore();
+    return;
+  }
+  Art.blit(ctx, Art.trashCan(), x, y);
+}
+
 function singingNotes(x, y, w) {
   ctx.fillStyle = '#fff6d0';
   ctx.font = '700 20px Gaegu, sans-serif';
@@ -856,7 +932,7 @@ function drawGrandma(shake = 0) {
 function drawDeath() {
   const x = death.x * T, y = rowFeet(death.row);
   ctx.save();
-  ctx.translate(x, y); ctx.scale(0.95, 0.95); ctx.translate(-x, -y);
+  ctx.translate(x, y); ctx.scale(1.2, 1.2); ctx.translate(-x, -y);
   if (death.kind === 'squash') {
     Art.pancake(ctx, x, y, death.t, death.by);
     if (death.by === 'present') Art.blit(ctx, Art.fallingPresent(0), x - T / 2, y - T + 4);
@@ -1055,7 +1131,7 @@ stageEl.addEventListener('pointerup', (e) => {
     // a tap: which way is it from Grandma?
     const r = canvas.getBoundingClientRect();
     const gx = r.left + currentX() * T * scale;
-    const gy = r.top + (rowFeet(currentRow()) - 20 + H + cam * T) * scale;
+    const gy = r.top + (rowFeet(currentRow()) - 28 + H + cam * T) * scale;
     const tx = e.clientX - gx, ty = e.clientY - gy;
     if (Math.hypot(tx, ty) < 10) return;
     dir = Math.abs(tx) > Math.abs(ty) ? (tx > 0 ? 'right' : 'left') : (ty > 0 ? 'down' : 'up');
@@ -1118,6 +1194,7 @@ if (DEBUG) {
     santaSwoop(t = 0.4) { santa.phase = 'swoop'; santa.t = t; },
     invincible(on = true) { invincible = on; },
     nog(n = 1) { nog += n; tipsy += L.nogTime(nog); },
+    raccoon(row, col, dir = 1) { coon = { row, col, phase: 'rattle', t: 0, dir }; },
     drop(row, col) { drops.push({ row, col, t: 0, variant: 0, landed: false }); },
     kill(kind = 'squash', by = 'car') { loseLife(kind, by); },
     pause(on = true) { paused = on; },

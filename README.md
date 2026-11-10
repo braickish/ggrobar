@@ -16,7 +16,9 @@ in it that comes through every few seconds.
 - In the neighborhood, kids in Santa hats zoom down the streets on e-bikes, and on the sidewalks carolers stop
   to sing and dogs stop to sniff. **Presents fall out of the sky** too: a shadow with a red ring shows where one's
   about to land. Don't be under it, but once it's down, grab it for points before a bike runs it over (or it fades).
-  Snowmen, bushes and Christmas trees in the front yards are in the way, like trees in the woods.
+  Snowmen, Christmas trees and trash cans in the front yards are in the way, like trees in the woods. If a
+  **trash can rattles** (with eyes peeking out), a raccoon is about to knock it over and dash along that yard,
+  grabbing any present in its way. Don't be in its path!
 - In the forest, trees block the way, so look for the gaps. Bunnies hop in bursts, deer freeze then dash,
   foxes trot and stop, and the moose is slow but very wide.
 - On the pond, stand on the ice floes. The water, and floes that drift off the edge, are a sploosh.

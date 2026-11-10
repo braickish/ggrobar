@@ -714,7 +714,7 @@ export function dogwalker(variant, frame = 0) {
 }
 
 // Front-yard things that are in the way, like trees in the woods: S snowman, B bush with lights,
-// T a little Christmas tree. Same box as a tree (it's drawn RISE higher).
+// T a little Christmas tree. (C, a trash can, has its own sprites: trashCan / trashTipped.) Same box as a tree (it's drawn RISE higher).
 export function yardDeco(kind, variant = 0) {
   return sprite(`deco-${kind}${variant}`, TILE, TILE + RISE, 6, (g) => {
     g.translate(0, RISE);
@@ -751,6 +751,78 @@ export function yardDeco(kind, variant = 0) {
       star(g, 30, -14, 6); paint(g, C.gold, INK, 1.2);
     }
   }, true);
+}
+
+// A metal trash can with its lid on (one of the yard things), and the same can knocked over by a raccoon.
+function canBody(g) {
+  g.beginPath(); g.moveTo(14, 18); g.lineTo(46, 18); g.lineTo(43, 52); g.lineTo(17, 52); g.closePath();
+  paint(g, vgrad(g, 18, 52, '#a9b4c9', '#7d89a3'));
+  g.strokeStyle = 'rgba(40,45,80,0.45)'; g.lineWidth = 1.5;
+  for (const x of [22, 30, 38]) { g.beginPath(); g.moveTo(x, 21); g.lineTo(x - (x - 30) * 0.1, 50); g.stroke(); }
+  rr(g, 13, 30, 34, 3, 1.5); paint(g, '#c3cbdc', INK, 1);
+}
+function canLid(g) {
+  ell(g, 30, 17, 19, 5); paint(g, '#b9c2d6', INK, 1.8);
+  rr(g, 26, 9, 8, 5, 2); paint(g, '#8e99b3', INK, 1.3);
+  snowCap(g, 13, 47, 15, 4, 5);
+}
+export function trashCan() {
+  return sprite('trashcan', TILE, TILE + RISE, 6, (g) => {
+    g.translate(0, RISE);
+    ell(g, 30, 53, 20, 5); paint(g, 'rgba(60,80,130,0.25)', null);
+    canBody(g); canLid(g);
+  }, true);
+}
+// peek: eyes shining out from under the lid while it rattles
+export function trashEyes() {
+  return sprite('trasheyes', 24, 8, 4, (g) => {
+    for (const x of [6, 18]) { circ(g, x, 4, 2.6); paint(g, '#ffe36a', INK, 1); circ(g, x, 4, 1); paint(g, INK, null); }
+  });
+}
+export function trashTipped() {
+  return sprite('trashtipped', TILE, TILE + RISE, 6, (g) => {
+    g.translate(0, RISE);
+    ell(g, 30, 52, 26, 6); paint(g, 'rgba(60,80,130,0.25)', null);
+    // spilled trash
+    for (const [x, y, c] of [[50, 48, '#e8d9b0'], [56, 44, '#d0634e'], [44, 52, '#8fb36a'], [58, 51, '#f0ead8']]) {
+      ell(g, x, y, 4, 2.5, 0.4); paint(g, c, INK, 1);
+    }
+    g.strokeStyle = '#e8b54e'; g.lineWidth = 2; g.beginPath(); g.moveTo(40, 46); g.quadraticCurveTo(46, 40, 52, 46); g.stroke();   // banana peel
+    // the can on its side, open end to the right
+    g.save(); g.translate(30, 44); g.rotate(-Math.PI / 2); g.translate(-30, -36);
+    canBody(g);
+    g.restore();
+    ell(g, 46, 44, 4, 9); paint(g, '#3a3f5e', INK, 1.5);
+    ell(g, 10, 50, 10, 3, 0.2); paint(g, '#b9c2d6', INK, 1.5);   // the lid, rolled off
+  }, true);
+}
+
+// A raccoon dashing away with its prize (drawn facing right; two frames for its legs).
+export function raccoon(frame) {
+  const w = 0.9 * TILE;
+  return sprite(`raccoon${frame}`, w, TILE, 24, (g) => {
+    ell(g, w / 2, 54, 22, 3.5); paint(g, 'rgba(20,24,50,0.28)', null);
+    // striped tail
+    g.save(); g.translate(8, 38); g.rotate(frame ? -0.5 : -0.3);
+    ell(g, -8, 0, 11, 5); paint(g, '#8a8794');
+    g.fillStyle = '#3b3842'; for (const x of [-14, -8, -2]) { g.fillRect(x, -5, 2.8, 10); }
+    ell(g, -8, 0, 11, 5); paint(g, null, INK, 1.4);
+    g.restore();
+    g.strokeStyle = '#2f2c36'; g.lineWidth = 3.2;
+    const legs = frame ? [[14, 6], [20, -4], [34, 6], [40, -4]] : [[14, -4], [20, 6], [34, -4], [40, 6]];
+    for (const [x0, d] of legs) { g.beginPath(); g.moveTo(x0, 42); g.lineTo(x0 + d, 53); g.stroke(); }
+    ell(g, 27, 40, 17, 9); paint(g, vgrad(g, 31, 49, '#9a97a3', '#76737f'));
+    // head with the mask
+    circ(g, 46, 34, 9); paint(g, '#9a97a3');
+    for (const ex of [40, 49]) { g.beginPath(); g.moveTo(ex - 3, 27); g.lineTo(ex, 20); g.lineTo(ex + 3, 27); g.closePath(); paint(g, '#76737f', INK, 1.2); }
+    ell(g, 47, 33, 8, 3.5); paint(g, '#2f2c36', null);
+    circ(g, 44, 33, 1.6); paint(g, '#fff', null); circ(g, 50, 33, 1.6); paint(g, '#fff', null);
+    ell(g, 53, 37, 4, 3); paint(g, '#e6e2ea', INK, 1.1);
+    circ(g, 57, 36, 1.6); paint(g, INK, null);
+    // a fish bone in its mouth
+    g.strokeStyle = '#f6f0e0'; g.lineWidth = 1.6;
+    g.beginPath(); g.moveTo(54, 40); g.lineTo(64, 42); for (const x of [57, 60]) { g.moveTo(x, 38.5); g.lineTo(x + 1, 44.5); } g.stroke();
+  });
 }
 
 // A present falling out of the sky (no glow, unlike the ones to pick up).
@@ -1349,9 +1421,11 @@ export function drawRow(g, def, y, W, above, below, seed) {
   }
   // Snowy edges where this row meets a different kind.
   const edge = (yy, up) => {
-    g.beginPath(); g.moveTo(0, yy);
+    // the snow starts a little past the row's edge (it's clipped there) so no sliver of road shows
+    const base = yy + (up ? 4 : -4);
+    g.beginPath(); g.moveTo(0, base);
     for (let x = 0; x <= W; x += 12) g.lineTo(x, yy + (up ? -1 : 1) * (2 + r() * 5));
-    g.lineTo(W, yy); g.closePath();
+    g.lineTo(W, base); g.closePath();
     g.fillStyle = type === 'pond' ? C.ice : C.snow; g.fill();
   };
   if (type === 'road' || type === 'pond' || type === 'rink') {
@@ -1406,6 +1480,7 @@ export function warmTasks() {
   for (let v = 0; v < 4; v++) makers.push(() => car(v), () => van(v), () => sled(v), () => skater(v, 0), () => skater(v, 1));
   makers.push(plow, () => sleigh(0), () => sleigh(1));
   for (let v = 0; v < 4; v++) makers.push(() => ebike(v), () => carolers(v, 0), () => carolers(v, 1), () => dogwalker(v, 0), () => dogwalker(v, 1), () => fallingPresent(v));
+  makers.push(() => raccoon(0), () => raccoon(1), trashEyes);
   for (const f of [0, 1]) makers.push(() => bunny(f), () => fox(f), () => deer(f), () => moose(f));
   for (const k of ['glasses', 'fruitcake', 'present', 'eggnog']) makers.push(() => pickup(k));
   for (const size of [2, 3]) for (let v = 0; v < 3; v++) for (const thin of [false, true]) makers.push(() => floe(size, v, thin));
@@ -1414,6 +1489,7 @@ export function warmTasks() {
   for (let v = 0; v < 3; v++) tasks.push(() => tree(v));
   tasks.push(lamppost, cottageSprite);
   for (const k of ['S', 'B', 'T']) for (let v = 0; v < 3; v++) tasks.push(() => yardDeco(k, v));
+  tasks.push(trashCan, trashTipped);
   for (let f = 0; f < BOIL_FRAMES; f++) {
     for (const m of makers) tasks.push(() => { const keep = boil; boil = f; m(); boil = keep; });
   }

@@ -21,13 +21,16 @@
 //   stops  [seconds going, seconds stopped]: carolers stop to sing, dogs stop to sniff, bunnies hop in bursts, deer freeze then dash
 //
 // forest rows say where the trees are, one letter per column: T is a tree, . is open snow.
-// lawn rows say the same with deco: S is a snowman, B a bush with lights, T a little Christmas tree.
+// lawn rows say the same with deco: S is a snowman, T a little Christmas tree, B a bush with lights,
+// C a trash can (raccoons live in them: one may rattle, tip it over and dash out along the row).
+// A road row with no kind is an empty lane.
 //
 // Each section also sets:
 //   checkpoint  the name of the stop at its start (the first section starts at the party instead)
 //   speed       a multiplier on everything that moves in it
 //   santaEvery  about how many seconds between sleigh swoops
 //   presentsEvery  (optional) about how many seconds between presents dropping out of the sky
+//   raccoonsEvery  (optional) about how many seconds between raccoons bursting out of trash cans
 
 export const SECTIONS = [
   {
@@ -38,21 +41,25 @@ export const SECTIONS = [
     speed: 1,
     santaEvery: 9,
     presentsEvery: 3.2,
-    // Blocks of front yard / sidewalk / street / sidewalk, starting quiet and getting busier.
+    raccoonsEvery: 6,
+    // Blocks of front yard / sidewalk / two-lane street / sidewalk, starting quiet and getting busier.
     rows: [
-      { type: 'lawn', deco: 'S.B....T.' },
+      { type: 'lawn', deco: 'S.C....T.' },
       { type: 'sidewalk', dir: 1, speed: 1.0, kind: 'dogwalker', count: 2, stops: [2.4, 1.0] },
       { type: 'road', dir: -1, speed: 2.0, kind: 'ebike', count: 2 },
+      { type: 'road' },
       { type: 'sidewalk', dir: 1, speed: 0.7, kind: 'carolers', count: 2, stops: [2.6, 1.8] },
-      { type: 'lawn', deco: '.B..S..B.' },
+      { type: 'lawn', deco: '.C..S...T' },
       { type: 'sidewalk', dir: -1, speed: 0.8, kind: 'carolers', count: 2, stops: [2.4, 2.0] },
       { type: 'road', dir: 1, speed: 2.6, kind: 'ebike', count: 2 },
-      { type: 'sidewalk', dir: -1, speed: 1.3, kind: 'dogwalker', count: 3, stops: [2.0, 1.0] },
-      { type: 'lawn', deco: 'T..S.B..S' },
-      { type: 'sidewalk', dir: 1, speed: 1.5, kind: 'dogwalker', count: 3, stops: [1.8, 1.0] },
+      { type: 'road', dir: -1, speed: 1.1, kind: 'car', count: 2 },
+      { type: 'sidewalk', dir: 1, speed: 1.3, kind: 'dogwalker', count: 3, stops: [2.0, 1.0] },
+      { type: 'lawn', deco: 'T..S..C.S' },
+      { type: 'sidewalk', dir: -1, speed: 1.5, kind: 'dogwalker', count: 3, stops: [1.8, 1.0] },
       { type: 'road', dir: -1, speed: 3.0, kind: 'ebike', count: 3 },
+      { type: 'road', dir: 1, speed: 2.6, kind: 'ebike', count: 2 },
       { type: 'sidewalk', dir: 1, speed: 1.0, kind: 'carolers', count: 3, stops: [2.2, 1.6] },
-      { type: 'lawn', deco: '.S.T..B.T' },
+      { type: 'lawn', deco: '.S.T..C.T' },
       { type: 'walk' },
       { type: 'road', dir: 1, speed: 1.8, kind: 'car', count: 3 },
       { type: 'road', dir: -1, speed: 1.5, kind: 'van', count: 2, stops: [3.0, 1.6] },

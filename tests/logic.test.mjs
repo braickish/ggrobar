@@ -30,6 +30,7 @@ test('moving rows are fully described', () => {
   for (const [i, r] of route.rows.entries()) {
     if (L.SAFE_TYPES.has(r.type)) { assert.equal(r.kind, undefined, `row ${i}`); continue; }
     assert.ok(kinds[r.type], `row ${i} type ${r.type}`);
+    if (r.type === 'road' && !r.kind) continue;            // an empty lane of a two-lane street
     assert.ok(kinds[r.type].includes(r.kind), `row ${i}`);
     assert.ok(r.dir === 1 || r.dir === -1, `row ${i}`);
     assert.ok(r.speed > 0 && r.count > 0, `row ${i}`);
@@ -60,7 +61,7 @@ test('trees only grow on forest rows and yard things only sit on lawns, never wh
     if (r.trees) assert.equal(r.type, 'forest', `row ${i}`);
     if (r.deco) {
       assert.equal(r.type, 'lawn', `row ${i}`);
-      assert.match(r.deco, /^[SBT.]{9}$/, `row ${i}`);
+      assert.match(r.deco, /^[SBTC.]{9}$/, `row ${i}`);
       assert.ok(r.blocked.size < L.COLS, `row ${i}`);
     }
   });
@@ -72,7 +73,7 @@ test('trees only grow on forest rows and yard things only sit on lawns, never wh
 
 test('hazard rows always leave a gap Grandma can fit through', () => {
   for (const [i, r] of route.rows.entries()) {
-    if (!L.HAZARD_TYPES.has(r.type)) continue;
+    if (!L.HAZARD_TYPES.has(r.type) || !r.kind) continue;
     const gap = L.LOOP / r.count - L.widthOf(r);
     assert.ok(gap >= 1.6, `row ${i} (${r.kind}): gap ${gap.toFixed(2)}`);
   }
@@ -198,17 +199,32 @@ test('pickup spots and scoring helpers', () => {
   assert.equal(L.snapCol(9.6), 8.5);
 });
 
-test('the first section is a neighborhood: yards, sidewalks either side of quiet streets, bikes in the street', () => {
+test('the first section is a neighborhood: yards, sidewalks, two-lane streets, bikes in the street', () => {
   const town = SECTIONS[0];
   town.rows.forEach((r, i) => {
     if (r.type === 'sidewalk') assert.notEqual(town.rows[i + 1]?.type, 'sidewalk', `rows ${i}-${i + 1}: two sidewalks in a row`);
     if (r.kind === 'ebike') assert.equal(r.type, 'road', `row ${i}`);
+    // streets come in pairs of lanes, with a sidewalk or more street on each side
+    if (r.type === 'road' && town.rows[i - 1]?.type !== 'road') assert.equal(town.rows[i + 1]?.type, 'road', `row ${i}: one-lane street`);
   });
   assert.ok(town.rows.filter((r) => r.type === 'sidewalk').length >= 6);
-  assert.ok(town.presentsEvery > 0);
-  // it starts quiet: the first block is sparser than the last
+  assert.ok(town.presentsEvery > 0 && town.raccoonsEvery > 0);
   const busy = (rows) => rows.reduce((n, r) => n + (r.count ?? 0), 0);
-  assert.ok(busy(town.rows.slice(0, 4)) < busy(town.rows.slice(8, 12)));
+  assert.ok(busy(town.rows.slice(0, 5)) < busy(town.rows.slice(9, 14)));
+});
+
+test('raccoons come out of upright trash cans just ahead of Grandma', () => {
+  const cans = [];
+  route.rows.forEach((r, row) => r.deco && [...r.deco].forEach((ch, col) => ch === 'C' && cans.push(row * 100 + col)));
+  assert.ok(cans.length >= 3);
+  const first = Math.floor(cans[0] / 100);
+  const spot = L.pickRaccoonCan(route, first - 2, new Set());
+  assert.ok(spot && route.rows[spot.row].deco[spot.col] === 'C');
+  assert.equal(L.pickRaccoonCan(route, first - 2, new Set([cans[0]])), null, 'a tipped can stays empty');
+  for (let i = 0; i < 50; i++) {
+    const s2 = L.pickRaccoonCan(route, first + 1, new Set());
+    assert.ok(!s2 || s2.row > first, 'cans behind her are ignored');
+  }
 });
 
 test('a landed present is run over by whatever drives over its tile, but not by something elsewhere', () => {
