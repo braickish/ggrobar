@@ -1,7 +1,7 @@
-import { SECTIONS } from './stages.js?v=202611102321';
-import * as L from './logic.js?v=202611102321';
-import * as Art from './art.js?v=202611102321';
-import { Sound } from './sound.js?v=202611102321';
+import { SECTIONS } from './stages.js?v=202611102325';
+import * as L from './logic.js?v=202611102325';
+import * as Art from './art.js?v=202611102325';
+import { Sound } from './sound.js?v=202611102325';
 
 const T = Art.TILE;
 const W = L.COLS * T;                           // 540
