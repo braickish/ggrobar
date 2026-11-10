@@ -18,9 +18,11 @@ and a regularly swooping sleigh. Built for a parent and their kids; keep it appr
   below the screen. The sky + cottage sit above the yard, and `camMax` stops the camera with them filling the top.
 - Neighborhood (first section, "Holly Lane"): `lawn` rows have `deco: 'S..B.T...'` (snowman / lit bush / little tree,
   blocking like trees, drawn by `Art.yardDeco`); `sidewalk` rows have `ebike`, `carolers` (stop to sing) and `dogwalker`
-  (stops to sniff). The user felt crossing lots of roads didn't fit walking through a neighborhood, so roads there are
-  just one street at the top. Sections with `presentsEvery` drop presents near her (`pickDropSpot`): shadow + red ring
-  for `DROP_WARN` s, then it lands and squashes her if she's on that tile.
+  (stops to sniff); e-bikes ride the `road` rows. The user wanted it to feel like a real neighborhood: blocks of yard /
+  sidewalk / street / sidewalk (never two sidewalks in a row, tested), quiet at first, then Main Street at the top.
+  Sections with `presentsEvery` drop presents near her (`pickDropSpot`): shadow + red ring for `DROP_WARN` s, then it
+  lands and squashes her if she's on that tile. A landed present is worth `DROP_PTS` if she steps on it, vanishes if a
+  mover drives over its tile (`presentRunOver`), and fades after `DROP_STAY` s (blinking for the last 2).
 - Forest: `forest` rows have `trees: 'T..TT.T.T'` (blocking tiles, drawn as tall still sprites); `trail` rows have
   animals. Animal personalities are lane-wide stop/go cycles (`stops`, `KIND_ACCEL`) so spacing stays even.
   `routeIsWalkable` (BFS) and the gap tests in `tests/logic.test.mjs` guard against impossible layouts.

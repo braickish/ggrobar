@@ -24,8 +24,8 @@ test('the walk is a sensible length (about 3–4 minutes for a good player)', ()
 
 test('moving rows are fully described', () => {
   const kinds = {
-    road: ['car', 'plow', 'van'], hill: ['sled'], rink: ['skater'], pond: ['floe'],
-    trail: ['bunny', 'deer', 'moose', 'fox'], sidewalk: ['ebike', 'carolers', 'dogwalker'],
+    road: ['car', 'plow', 'van', 'ebike'], hill: ['sled'], rink: ['skater'], pond: ['floe'],
+    trail: ['bunny', 'deer', 'moose', 'fox'], sidewalk: ['carolers', 'dogwalker'],
   };
   for (const [i, r] of route.rows.entries()) {
     if (L.SAFE_TYPES.has(r.type)) { assert.equal(r.kind, undefined, `row ${i}`); continue; }
@@ -198,13 +198,24 @@ test('pickup spots and scoring helpers', () => {
   assert.equal(L.snapCol(9.6), 8.5);
 });
 
-test('the first section is a neighborhood: mostly sidewalks and yards, one street to cross', () => {
+test('the first section is a neighborhood: yards, sidewalks either side of quiet streets, bikes in the street', () => {
   const town = SECTIONS[0];
-  const roads = town.rows.filter((r) => r.type === 'road').length;
-  const walks = town.rows.filter((r) => r.type === 'sidewalk').length;
-  assert.ok(roads <= 2, `${roads} road rows`);
-  assert.ok(walks >= 8, `${walks} sidewalk rows`);
+  town.rows.forEach((r, i) => {
+    if (r.type === 'sidewalk') assert.notEqual(town.rows[i + 1]?.type, 'sidewalk', `rows ${i}-${i + 1}: two sidewalks in a row`);
+    if (r.kind === 'ebike') assert.equal(r.type, 'road', `row ${i}`);
+  });
+  assert.ok(town.rows.filter((r) => r.type === 'sidewalk').length >= 6);
   assert.ok(town.presentsEvery > 0);
+  // it starts quiet: the first block is sparser than the last
+  const busy = (rows) => rows.reduce((n, r) => n + (r.count ?? 0), 0);
+  assert.ok(busy(town.rows.slice(0, 4)) < busy(town.rows.slice(8, 12)));
+});
+
+test('a landed present is run over by whatever drives over its tile, but not by something elsewhere', () => {
+  const lane = { type: 'road', objs: [{ x: 2, w: 1.2 }] };
+  assert.ok(L.presentRunOver(lane, 2));
+  assert.ok(!L.presentRunOver(lane, 5));
+  assert.ok(!L.presentRunOver({ type: 'lawn', objs: [] }, 2));
 });
 
 test('eggnog stacks: each glass wobbles longer and a bit more, within reason', () => {

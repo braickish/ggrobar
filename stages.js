@@ -4,9 +4,9 @@
 // its own rows, bottom to top.
 //
 // Row types:
-//   walk    safe snowy ground          road   cars, plows and vans          hill   kids on sleds
+//   walk    safe snowy ground          road   cars, plows, vans, kids on e-bikes          hill   kids on sleds
 //   lawn    a front yard with snowmen, bushes and Christmas trees to walk around (no movers)
-//   sidewalk  kids on e-bikes, carolers, people walking dogs
+//   sidewalk  carolers, people walking dogs
 //   rink    solid ice with skaters     pond   open water: ride the ice floes or fall in
 //   forest  trees Grandma has to walk around (no movers)
 //   trail   a path through the woods that animals cross
@@ -31,26 +31,28 @@
 
 export const SECTIONS = [
   {
-    // Grandma's neighbors' front yards and the sidewalks between them. Presents keep falling out of the
-    // sky here (watch for their shadows), and at the top she crosses Main Street to the park.
+    // Grandma's neighbors' front yards, sidewalks and quiet streets full of kids on e-bikes. Presents keep
+    // falling out of the sky here (watch for their shadows; grab the ones that land), and at the top she
+    // crosses Main Street to the park.
     name: 'Holly Lane',
     speed: 1,
     santaEvery: 9,
-    presentsEvery: 2.8,
+    presentsEvery: 3.2,
+    // Blocks of front yard / sidewalk / street / sidewalk, starting quiet and getting busier.
     rows: [
       { type: 'lawn', deco: 'S.B....T.' },
-      { type: 'sidewalk', dir: 1, speed: 2.4, kind: 'ebike', count: 3 },
-      { type: 'sidewalk', dir: -1, speed: 0.8, kind: 'carolers', count: 3, stops: [2.6, 1.8] },
+      { type: 'sidewalk', dir: 1, speed: 1.0, kind: 'dogwalker', count: 2, stops: [2.4, 1.0] },
+      { type: 'road', dir: -1, speed: 2.0, kind: 'ebike', count: 2 },
+      { type: 'sidewalk', dir: 1, speed: 0.7, kind: 'carolers', count: 2, stops: [2.6, 1.8] },
       { type: 'lawn', deco: '.B..S..B.' },
-      { type: 'sidewalk', dir: 1, speed: 1.3, kind: 'dogwalker', count: 3, stops: [2.2, 0.9] },
-      { type: 'sidewalk', dir: -1, speed: 3.0, kind: 'ebike', count: 2 },
+      { type: 'sidewalk', dir: -1, speed: 0.8, kind: 'carolers', count: 2, stops: [2.4, 2.0] },
+      { type: 'road', dir: 1, speed: 2.6, kind: 'ebike', count: 2 },
+      { type: 'sidewalk', dir: -1, speed: 1.3, kind: 'dogwalker', count: 3, stops: [2.0, 1.0] },
       { type: 'lawn', deco: 'T..S.B..S' },
-      { type: 'sidewalk', dir: 1, speed: 0.9, kind: 'carolers', count: 3, stops: [2.4, 2.0] },
-      { type: 'sidewalk', dir: -1, speed: 2.7, kind: 'ebike', count: 3 },
       { type: 'sidewalk', dir: 1, speed: 1.5, kind: 'dogwalker', count: 3, stops: [1.8, 1.0] },
+      { type: 'road', dir: -1, speed: 3.0, kind: 'ebike', count: 3 },
+      { type: 'sidewalk', dir: 1, speed: 1.0, kind: 'carolers', count: 3, stops: [2.2, 1.6] },
       { type: 'lawn', deco: '.S.T..B.T' },
-      { type: 'sidewalk', dir: 1, speed: 3.3, kind: 'ebike', count: 2 },
-      { type: 'sidewalk', dir: -1, speed: 1.0, kind: 'carolers', count: 3, stops: [2.2, 1.6] },
       { type: 'walk' },
       { type: 'road', dir: 1, speed: 1.8, kind: 'car', count: 3 },
       { type: 'road', dir: -1, speed: 1.5, kind: 'van', count: 2, stops: [3.0, 1.6] },

@@ -1,7 +1,7 @@
-import { SECTIONS } from './stages.js?v=202611102150';
-import * as L from './logic.js?v=202611102150';
-import * as Art from './art.js?v=202611102150';
-import { Sound } from './sound.js?v=202611102150';
+import { SECTIONS } from './stages.js?v=202611102238';
+import * as L from './logic.js?v=202611102238';
+import * as Art from './art.js?v=202611102238';
+import { Sound } from './sound.js?v=202611102238';
 
 const T = Art.TILE;
 const W = L.COLS * T;                           // 540
@@ -111,7 +111,7 @@ function respawn() {
   nog = 0;
   tipsy = 0;
   drops = [];
-  dropNext = 2.5;
+  dropNext = 4;
   maxRow = Math.max(maxRow, row);
   death = null;
   cam = Math.min(cam, camFor(row));
@@ -292,6 +292,7 @@ function landed() {
     maxRow = row;
   }
   const col = Math.floor(gran.x);
+  grabDrop(row, col);
   for (const p of pickups) {
     if (p.got || p.row !== row || p.col !== col) continue;
     p.got = true;
@@ -474,19 +475,35 @@ function updateDrops(dt) {
   }
   for (const d of drops) {
     d.t += dt;
+    if (d.landed && !d.gone) {
+      // run over by a bike or car: it's gone
+      if (L.presentRunOver(lanes[d.row], d.col)) {
+        d.gone = true;
+        poof(d);
+        if (d.row >= cam && d.row <= cam + H / T) Sound.crack();
+      } else if (d.t >= L.DROP_WARN + L.DROP_STAY) { d.gone = true; poof(d); }
+    }
     if (!d.landed && d.t >= L.DROP_WARN) {
       d.landed = true;
       Sound.thud();
       const cx = (d.col + 0.5) * T, cy = rowTop(d.row) + T - 8;
       for (let i = 0; i < 10; i++) particles.push({ x: cx + rand(-20, 20), y: cy, vx: rand(-2, 2), vy: rand(-2.5, -0.5), life: rand(0.3, 0.6), t: 0, c: '#ffffff', r: rand(1.5, 3.5) });
-      if (currentRow() === d.row && Math.abs(currentX() - (d.col + 0.5)) < 0.55) loseLife('squash', 'present');
-    }
-    if (d.landed && d.t >= L.DROP_WARN + L.DROP_SIT && !d.popped) {
-      d.popped = true;
-      sparkle((d.col + 0.5) * T, rowTop(d.row) + T / 2, WRAP_SPARK[d.variant]);
+      if (currentRow() === d.row && Math.abs(currentX() - (d.col + 0.5)) < 0.55) { d.gone = true; loseLife('squash', 'present'); }
     }
   }
-  drops = drops.filter((d) => !d.popped);
+  drops = drops.filter((d) => !d.gone);
+}
+function poof(d) { sparkle((d.col + 0.5) * T, rowTop(d.row) + T / 2, WRAP_SPARK[d.variant]); }
+
+// She stepped onto a present that landed: it's hers.
+function grabDrop(row, col) {
+  const d = drops.find((q) => q.landed && !q.gone && q.row === row && q.col === col);
+  if (!d) return;
+  d.gone = true;
+  Sound.pickup();
+  poof(d);
+  addScore(L.DROP_PTS, gran.x * T, rowTop(row) - 8, `Present! +${L.DROP_PTS * mult()}`);
+  drops = drops.filter((q) => !q.gone);
 }
 const WRAP_SPARK = ['#ff6a5a', '#6ad08a', '#6ab4ff', '#ffd25a'];
 
@@ -506,8 +523,11 @@ function drawDropShadows() {
     }
   }
 }
-function drawDrops() {
+function drawDrops(landed) {
   for (const d of drops) {
+    if (d.landed !== landed) continue;
+    const left0 = L.DROP_WARN + L.DROP_STAY - d.t;
+    if (landed && left0 < 2 && Math.floor(left0 * 6) % 2) continue;   // blinks before it fades
     const fall = 0.4;                                        // it comes into view for the last bit
     const left = L.DROP_WARN - d.t;
     let y = rowTop(d.row) - 4, sq = 1;
@@ -676,6 +696,7 @@ function draw() {
     const bob = Math.sin(time * 3 + p.col) * 2;
     Art.blit(ctx, Art.pickup(p.kind), p.col * T, rowTop(p.row) + bob);
   }
+  drawDrops(true);
 
   // Things standing in the rows, from the top down, so lower things overlap higher ones.
   const gRow = state === 'dying' || state === 'won' || ((state === 'over') && death) ? -1 : currentRow();
@@ -696,7 +717,7 @@ function draw() {
     if (death && death.row === row) drawDeath();
   }
 
-  drawDrops();
+  drawDrops(false);
   drawSantaNose();
   drawSleigh();
 

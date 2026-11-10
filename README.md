@@ -13,9 +13,10 @@ in it that comes through every few seconds.
   the sleigh is about to swoop through that row. Get out of it!
 - Walking into the **side** of a car, sled, bike or animal bounces Grandma back: she twirls, then stumbles
   back one more row (watch what's behind her!). Getting hit **head-on** (its front reaching her) is what flattens her.
-- In the neighborhood, kids in Santa hats zoom by on e-bikes, carolers stop to sing, and dogs stop to sniff.
-  **Presents fall out of the sky** too: a shadow with a red ring shows where one's about to land. Snowmen,
-  bushes and Christmas trees in the front yards are in the way, like trees in the woods.
+- In the neighborhood, kids in Santa hats zoom down the streets on e-bikes, and on the sidewalks carolers stop
+  to sing and dogs stop to sniff. **Presents fall out of the sky** too: a shadow with a red ring shows where one's
+  about to land. Don't be under it, but once it's down, grab it for points before a bike runs it over (or it fades).
+  Snowmen, bushes and Christmas trees in the front yards are in the way, like trees in the woods.
 - In the forest, trees block the way, so look for the gaps. Bunnies hop in bursts, deer freeze then dash,
   foxes trot and stop, and the moose is slow but very wide.
 - On the pond, stand on the ice floes. The water, and floes that drift off the edge, are a sploosh.
@@ -33,6 +34,7 @@ in it that comes through every few seconds.
 | Each new row reached | 10 |
 | Reaching a checkpoint | 100, plus 3 per second left on the cold meter |
 | Reading glasses, fruitcake, present | 25 each (every section has a set) |
+| A present that fell from the sky | 50 |
 | All three in one section | 150 bonus |
 | Getting home | 300, plus 3 per second left on the cold meter, plus 100 per life left |
 | Eggnog | ×2 points, then ×3, ×4… with every glass, until she loses a life. Each glass makes her tipsy for longer (12 s, then 18, 24…): her steps wander sideways sometimes |

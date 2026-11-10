@@ -38,7 +38,8 @@ export const nogDrift = (glasses) => Math.min(0.55, 0.22 + 0.08 * glasses);   //
 
 // Presents falling out of the sky (the neighborhood): a shadow grows for DROP_WARN seconds, then it lands.
 export const DROP_WARN = 1.3;
-export const DROP_SIT = 0.8;                    // it sits there a moment before it pops
+export const DROP_STAY = 9;                    // a landed present stays this long (blinking at the end)...
+export const DROP_PTS = 50;                    // ...for Grandma to grab, unless something runs it over first
 
 // A small seeded random number generator, so a layout can be repeated.
 export function rng(seed = 1) {
@@ -170,6 +171,11 @@ export function hitKind(o, dir, x, half = GRANDMA_HALF) {
   return depth < HEAD_ON_DEPTH ? 'front' : 'side';
 }
 
+// Has something in this lane run over the present sitting in column col?
+export function presentRunOver(lane, col) {
+  return !!(lane && lane.objs.length && lane.type !== 'pond' && hazardAt(lane, col + 0.5, 0.3));
+}
+
 // The floe Grandma is standing on, if any.
 export function floeUnder(lane, x, time) {
   for (const o of lane.objs) {
@@ -263,7 +269,7 @@ export function pickDropSpot(route, section, gRow, gCol, taken = [], rand = Math
     const col = Math.max(0, Math.min(COLS - 1, gCol + Math.floor(rand() * 5) - 2));
     const def = route.rows[row];
     if (!def || def.section !== section) continue;
-    if (def.type === 'start' || def.type === 'checkpoint' || def.type === 'yard') continue;
+    if (def.type === 'start' || def.type === 'checkpoint' || def.type === 'yard' || def.type === 'pond') continue;
     if (isBlocked(route, row, col)) continue;
     if (taken.some((d) => d.row === row && d.col === col)) continue;
     return { row, col };
