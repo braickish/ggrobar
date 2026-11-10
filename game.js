@@ -1,7 +1,7 @@
-import { SECTIONS } from './stages.js';
-import * as L from './logic.js';
-import * as Art from './art.js';
-import { Sound } from './sound.js';
+import { SECTIONS } from './stages.js?v=202611100714';
+import * as L from './logic.js?v=202611100714';
+import * as Art from './art.js?v=202611100714';
+import { Sound } from './sound.js?v=202611100714';
 
 const T = Art.TILE;
 const W = L.COLS * T;                           // 540
@@ -958,6 +958,8 @@ buildProgress();
 requestAnimationFrame(frame);
 // The row pictures include handwritten names, so redraw them once the font has arrived.
 if (document.fonts) document.fonts.ready.then(() => { headUrl = null; livesEl.replaceChildren(); resetRing(); updateHud(); });
+
+window.ggrobarStarted = true;   // tells the page's safety net the game loaded
 
 // Test hooks, only with ?debug in the address.
 if (DEBUG) {

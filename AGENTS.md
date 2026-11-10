@@ -46,5 +46,9 @@ and a regularly swooping sleigh. Built for a parent and their kids; keep it appr
 - `?debug` exposes `window.ggrobar` (see README). Screenshots/play tests were done with Playwright from
   `~/workspace/projects/witches-brew/node_modules`; there's no Playwright dependency here.
 - Deployed on GitHub Pages from `main` at the repo root: https://braickish.github.io/ggrobar/
+- **Before every push: `npm run bump`.** It stamps a new `?v=` on the stylesheet, `game.js` and every module
+  import. Pages lets browsers cache each file ~10 min, and a browser holding the previous release could mix an old
+  module with a new one (e.g. old `stages.js` without `SECTIONS`), which stops the game loading: a blank board.
+  index.html also shows a "reload" card if the game hasn't started 4 s after load.
 - Ideas for later: leaderboard (same Supabase pattern as Witch's Brew; a fixed-length walk suits it), the kids'
   own drawings, more sections, a "cocoa" extra life, raccoons in town.
