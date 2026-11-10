@@ -234,3 +234,5 @@ body {
   text-decoration: underline;
   cursor: pointer;
 }
+
+.card .intro { font-size: 21px; line-height: 1.4; margin: 10px 4px 18px; text-wrap: balance; }

@@ -4,7 +4,8 @@ A Christmas lane-crossing browser game: Grandma walks home on Christmas Eve past
 and a regularly swooping sleigh. Built for a parent and their kids; keep it approachable and kid-friendly
 (getting hit is cartoonish: pancake, ice cube, snowman).
 
-- The name is an acronym the user chose. Keep the song's lyrics, melody and full title out of the game,
+- The name is an acronym the user chose. Keep the song's lyrics, melody and full title out of the game (the title
+  card's one-line intro, which nods to the song, is the user's own wording, added at their request),
   and don't copy Frogger's look, layout or sounds; the lane-crossing genre itself is fine.
 - Static site, no build step, ES modules: `index.html`, `style.css`, `stages.js` (the walk's sections and rows,
   meant to be edited by hand), `logic.js` (pure rules, imported by the game and by Node tests), `art.js` (all

@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&family=Mountains+of+Christmas:wght@700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=202611102302">
+  <link rel="stylesheet" href="style.css?v=202611102307">
 </head>
 <body>
   <header class="hud">
@@ -53,10 +53,7 @@
     <div id="title-panel" class="panel">
       <div class="card">
         <h2>GGROBAR</h2>
-        <p>It's Christmas Eve, and Grandma's walking home from the party. Help her through the neighborhood, over the sledding hill, across the frozen pond and through the woods.</p>
-        <p><strong>Watch for the red glow.</strong> When you hear sleigh bells and see a red light at the side of a row, the sleigh is about to swoop through it.</p>
-        <p class="small">Walking into the side of a car or sled just bounces her back. It's getting hit head-on that flattens her.</p>
-        <p class="small">Checkpoints along the way warm her up, and she starts there again if she gets flattened. Grab her reading glasses, fruitcake and present for a bonus. Eggnog doubles your points, and every glass after that adds more (×3, ×4…) until she gets flattened, but she gets wobbly. Watch out for presents falling out of the sky!</p>
+        <p class="intro">Only you can change Grandma's fate and keep her from getting run over by a reindeer walking home from your house on Christmas Eve.</p>
         <button id="start-btn" class="big-btn">Start walking</button>
         <p class="keys">Arrow keys or WASD · Swipe or tap on a phone</p>
       </div>
@@ -93,7 +90,7 @@
   </div>
 
   <!-- Every file carries the same version, so a browser can't mix files from two releases. npm run bump changes it. -->
-  <script type="module" src="game.js?v=202611102302"></script>
+  <script type="module" src="game.js?v=202611102307"></script>
   <script>
     // If the game hasn't started a few seconds after the page loads, say so instead of leaving a blank board.
     window.addEventListener('load', () => setTimeout(() => {
