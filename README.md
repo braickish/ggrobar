@@ -15,7 +15,7 @@ in it that comes through every few seconds.
 - Walking into the **side** of a car, sled, bike or animal bounces Grandma back: she twirls, then stumbles
   back one more row (watch what's behind her!). Getting hit **head-on** (its front reaching her) is what flattens her.
 - In the neighborhood, kids in Santa hats zoom down the streets on e-bikes, and on the sidewalks carolers stop
-  to sing and dogs stop to sniff. **Presents fall out of the sky** too: a shadow with a red ring shows where one's
+  to sing and dogs stop to sniff. **Presents fall out of the sky** too: a growing shadow shows where one's
   about to land. Don't be under it, but once it's down, grab it for points before a bike runs it over (or it pops after 5 seconds).
   Snowmen, Christmas trees and trash cans in the front yards are in the way, like trees in the woods. If a
   **trash can rattles** (with eyes peeking out), a raccoon is about to knock it over and dash along that yard,

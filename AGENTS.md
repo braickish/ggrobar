@@ -30,7 +30,7 @@ and a regularly swooping sleigh. Built for a parent and their kids; keep it appr
   (stops to sniff); e-bikes ride the `road` rows. The user wanted it to feel like a real neighborhood: blocks of yard /
   two-row yard (things in its two rows never share a column, tested) / sidewalk / two-lane street (a `road` row with
   no `kind` is an empty lane) / sidewalk (never two sidewalks in a row, tested), quiet at first, then Main Street at the top.
-  Sections with `presentsEvery` drop presents near her (`pickDropSpot`): shadow + red ring for `DROP_WARN` s, then it
+  Sections with `presentsEvery` drop presents near her (`pickDropSpot`): a growing shadow (no red ring; the user removed it) for `DROP_WARN` s, then it
   lands and squashes her if she's on that tile. A landed present is worth `DROP_PTS` if she steps on it, vanishes if a
   mover drives over its tile (`presentRunOver`), and pops after `DROP_STAY` s (same sparkle as being run over; the user didn't want blinking).
   Lawn `C` is a trash can (the user found the lit bushes `B` too busy, so they're unused but still drawable). Sections

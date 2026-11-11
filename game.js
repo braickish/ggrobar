@@ -1,7 +1,7 @@
-import { SECTIONS } from './stages.js?v=202611110448';
-import * as L from './logic.js?v=202611110448';
-import * as Art from './art.js?v=202611110448';
-import { Sound } from './sound.js?v=202611110448';
+import { SECTIONS } from './stages.js?v=202611110452';
+import * as L from './logic.js?v=202611110452';
+import * as Art from './art.js?v=202611110452';
+import { Sound } from './sound.js?v=202611110452';
 
 const T = Art.TILE;
 const W = L.COLS * T;                           // 540
@@ -538,13 +538,6 @@ function drawDropShadows() {
     ctx.fillStyle = `rgba(30,30,70,${0.12 + 0.3 * k})`;
     Art.ell(ctx, cx, cy, 6 + 18 * k, 2 + 5 * k);
     ctx.fill();
-    if (!d.landed) {
-      // a ring that tightens onto the spot
-      ctx.strokeStyle = `rgba(255,90,70,${0.35 + 0.4 * k})`;
-      ctx.lineWidth = 2;
-      Art.ell(ctx, cx, cy, 30 - 8 * k, 10 - 2 * k);
-      ctx.stroke();
-    }
   }
 }
 function drawDrops(landed) {
