@@ -870,6 +870,320 @@ export function lamppost() {
   }, true);
 }
 
+// ---- The stops along the way (the party, the corner, the warming hut, the neighbor's porch) ----
+// Each stop's row has its own ground (drawStopGround) and things standing on it (scene). The things
+// block their tiles like trees do; logic.js SCENES says which tiles, and these pictures fill them.
+// scene(name) lists the pictures as { pic, col, rise, live }: drawn with the box's left edge at col,
+// rise units above the row's top. live parts (the campfire) boil like moving things, so the flames flicker.
+export function scene(name) {
+  if (name === 'party') return [{ pic: partyPillar(), col: 0, rise: 78 }, { pic: partyPillar(), col: 8, rise: 78, flip: true }];
+  if (name === 'lamppost') return [{ pic: mailbox(), col: 1, rise: 24 }, { pic: cornerLamp(), col: 6, rise: 112 }];
+  if (name === 'hut') return [{ pic: warmingHut(), col: 0, rise: 86 }, { pic: campfire(), col: 7, rise: 30, live: true }];
+  if (name === 'porch') return [{ pic: mailbox(), col: 3, rise: 24, flip: true }, { pic: neighborPorch(), col: 6, rise: 118 }];
+  return [];
+}
+// Smoke from the warming hut's chimney, drawn live like the cottage's. (x, y) is the row's top-left.
+export function sceneLive(g, name, x, y, time) {
+  if (name !== 'hut') return;
+  g.save();
+  g.fillStyle = 'rgb(230,236,250)';
+  for (let i = 0; i < 4; i++) {
+    const k = (time * 0.35 + i / 4) % 1;
+    circ(g, x + 92 + Math.sin(k * 6 + i) * 5 + k * 12, y - 76 - k * 40, 3 + k * 8);
+    g.globalAlpha = 0.35 * (1 - k); g.fill();
+  }
+  g.restore();
+}
+
+// The party house's front porch pillar: garland wound round it, a lantern on top, and balloons.
+function partyPillar() {
+  const rise = 78;
+  return sprite('partypillar', TILE, TILE + rise, 26, (g) => {
+    g.translate(0, rise);
+    ell(g, 30, 54, 24, 5); paint(g, 'rgba(60,40,30,0.3)', null);
+    // balloons tied to it, floating up and out
+    const balloons = [[44, -64, '#d9473c'], [56, -50, C.gold], [36, -46, '#3f948e']];
+    g.strokeStyle = 'rgba(43,42,72,0.7)'; g.lineWidth = 1;
+    for (const [bx, by] of balloons) { g.beginPath(); g.moveTo(32, -14); g.quadraticCurveTo(bx - 6, by + 30, bx, by + 13); g.stroke(); }
+    for (const [bx, by, c] of balloons) {
+      ell(g, bx, by, 10, 12.5); paint(g, vgrad(g, by - 12, by + 12, c, c), INK, 1.6);
+      ell(g, bx - 3.5, by - 4.5, 2.5, 4, -0.4); paint(g, 'rgba(255,255,255,0.6)', null);
+      g.beginPath(); g.moveTo(bx - 2.5, by + 15.5); g.lineTo(bx, by + 12.5); g.lineTo(bx + 2.5, by + 15.5); g.closePath(); paint(g, c, INK, 1);
+    }
+    // the pillar: a base, the shaft and a cap
+    rr(g, 12, 40, 36, 14, 2); paint(g, vgrad(g, 40, 54, '#f3ece0', '#d8cdb9'), INK, 1.8);
+    rr(g, 18, -14, 24, 56, 2); paint(g, vgrad(g, -14, 42, '#fbf6ee', '#e2d8c6'), INK, 1.8);
+    g.strokeStyle = 'rgba(150,130,110,0.5)'; g.lineWidth = 1.2;
+    for (const x of [24, 30, 36]) { g.beginPath(); g.moveTo(x, -10); g.lineTo(x, 38); g.stroke(); }
+    rr(g, 13, -22, 34, 9, 2); paint(g, '#f3ece0', INK, 1.8);
+    snowCap(g, 13, 47, -22, 4, 3);
+    // garland spiralling down it, with bulbs
+    g.strokeStyle = C.green; g.lineWidth = 4;
+    g.beginPath(); g.moveTo(18, -10);
+    for (let i = 0; i < 4; i++) { const y0 = -10 + i * 13; g.quadraticCurveTo(30, y0 + 9, 42, y0 + 4); g.quadraticCurveTo(30, y0 + 1, 18, y0 + 13); }
+    g.stroke();
+    for (let i = 0; i < 8; i++) { circ(g, i % 2 ? 37 : 23, -4 + i * 6.5, 2.2); paint(g, BULBS[i % 4], INK, 0.7); }
+    // a lantern on top
+    glow(g, 30, -36, 26, 'rgba(255,205,120,0.6)');
+    rr(g, 22, -44, 16, 18, 3); paint(g, vgrad(g, -44, -26, '#fff1c2', '#ffc76a'), INK, 1.8);
+    g.beginPath(); g.moveTo(20, -44); g.lineTo(30, -52); g.lineTo(40, -44); g.closePath(); paint(g, '#3c3f5e', INK, 1.4);
+    // a red bow under the cap
+    ell(g, 24, -10, 6, 3.5, -0.4); paint(g, C.red, INK, 1.2);
+    ell(g, 36, -10, 6, 3.5, 0.4); paint(g, C.red, INK, 1.2);
+    circ(g, 30, -10, 2.5); paint(g, C.red, INK, 1);
+  }, true);
+}
+
+// A red mailbox on a post with a letter for Santa poking out.
+function mailbox() {
+  const rise = 24;
+  return sprite('mailbox', TILE, TILE + rise, 8, (g) => {
+    g.translate(0, rise);
+    ell(g, 30, 54, 16, 4); paint(g, 'rgba(60,80,130,0.25)', null);
+    rr(g, 27, 8, 6, 46, 1); paint(g, '#7a4a2a', INK, 1.5);
+    g.beginPath(); g.moveTo(12, 14); g.lineTo(12, -4); g.quadraticCurveTo(12, -16, 24, -16); g.lineTo(40, -16);
+    g.quadraticCurveTo(50, -16, 50, -4); g.lineTo(50, 14); g.closePath();
+    paint(g, vgrad(g, -16, 14, '#d9473c', '#a8332c'), INK, 1.8);
+    ell(g, 12, -1, 5, 15); paint(g, '#b83a32', INK, 1.5);
+    rr(g, 6, -6, 10, 7, 1); paint(g, '#f6f0e0', INK, 1.1);               // the letter
+    g.strokeStyle = C.red; g.lineWidth = 1; g.beginPath(); g.moveTo(6, -6); g.lineTo(11, -2); g.lineTo(16, -6); g.stroke();
+    g.fillStyle = INK; rr(g, 50, -12, 3, 16, 1); g.fill();                    // the flag, up
+    rr(g, 50, -12, 9, 6, 1); paint(g, C.gold, INK, 1);
+    snowCap(g, 14, 48, -14, 5, 7);
+  }, true);
+}
+
+// The lamppost on the corner: a tall old two-lantern street lamp with a wreath, and a sign
+// pointing the way to the sledding hill.
+function cornerLamp() {
+  const rise = 112;
+  return sprite('cornerlamp', TILE, TILE + rise, 30, (g) => {
+    g.translate(0, rise);
+    ell(g, 30, 54, 18, 4); paint(g, 'rgba(40,40,80,0.3)', null);
+    // base and pole
+    g.beginPath(); g.moveTo(20, 54); g.lineTo(23, 36); g.lineTo(37, 36); g.lineTo(40, 54); g.closePath(); paint(g, '#3c3f5e', INK, 1.8);
+    rr(g, 26, -70, 8, 108, 2); paint(g, '#3c3f5e', INK, 1.8);
+    for (const y of [36, -10, -66]) { rr(g, 23, y - 3, 14, 5, 2); paint(g, '#4c5078', INK, 1.3); }
+    // the sign: a green blade with an arrow and a little sled
+    rr(g, -2, -40, 30, 12, 2); paint(g, '#2f7a55', INK, 1.5);
+    g.strokeStyle = '#f6f0e0'; g.lineWidth = 1.8;
+    g.beginPath(); g.moveTo(22, -34); g.lineTo(2, -34); g.moveTo(6, -38); g.lineTo(1.5, -34); g.lineTo(6, -30); g.stroke();
+    g.beginPath(); g.moveTo(10, -31); g.lineTo(20, -31); g.quadraticCurveTo(23, -31, 23, -34); g.moveTo(12, -31); g.lineTo(12, -34); g.moveTo(18, -31); g.lineTo(18, -34); g.stroke();
+    snowCap(g, -2, 28, -40, 2.5, 11);
+    // crossarm with two lanterns hanging from it
+    g.strokeStyle = INK; g.lineWidth = 3.5;
+    g.beginPath(); g.moveTo(4, -72); g.quadraticCurveTo(30, -84, 56, -72); g.stroke();
+    g.strokeStyle = '#3c3f5e'; g.lineWidth = 2.2; g.stroke();
+    for (const lx of [6, 54]) {
+      glow(g, lx, -56, 34, 'rgba(255,205,120,0.65)');
+      g.strokeStyle = INK; g.lineWidth = 1.5; g.beginPath(); g.moveTo(lx, -73); g.lineTo(lx, -68); g.stroke();
+      g.beginPath(); g.moveTo(lx - 9, -60); g.lineTo(lx, -69); g.lineTo(lx + 9, -60); g.closePath(); paint(g, '#3c3f5e', INK, 1.5);
+      g.beginPath(); g.moveTo(lx - 7, -60); g.lineTo(lx + 7, -60); g.lineTo(lx + 5, -44); g.lineTo(lx - 5, -44); g.closePath();
+      paint(g, vgrad(g, -60, -44, '#fff3c8', '#ffc76a'), INK, 1.6);
+      rr(g, lx - 6, -45, 12, 4, 1.5); paint(g, '#3c3f5e', INK, 1.2);
+      snowCap(g, lx - 9, lx + 9, -62, 3, lx);
+    }
+    circ(g, 30, -84, 4); paint(g, C.gold, INK, 1.3);                          // finial
+    // a wreath with a red bow
+    g.lineWidth = 5; g.strokeStyle = C.green; g.beginPath(); g.arc(30, 6, 8, 0, TAU); g.stroke();
+    g.strokeStyle = INK; g.lineWidth = 1; g.beginPath(); g.arc(30, 6, 10.5, 0, TAU); g.stroke();
+    g.fillStyle = C.red; for (let i = 0; i < 6; i++) { const a = (i / 6) * TAU + 0.3; circ(g, 30 + Math.cos(a) * 8, 6 + Math.sin(a) * 8, 1.5); g.fill(); }
+    ell(g, 25, 15, 5, 3, -0.4); paint(g, C.red, INK, 1); ell(g, 35, 15, 5, 3, 0.4); paint(g, C.red, INK, 1);
+    snowCap(g, 20, 40, 50, 3, 5);
+  }, true);
+}
+
+// The warming hut by the pond: a little log cabin with a snowy roof, a glowing window, an open door
+// and a mug hanging over it (that's where the cocoa is). Smoke comes from sceneLive.
+function warmingHut() {
+  const rise = 86, w = 2 * TILE;
+  return sprite('warminghut', w, TILE + rise, 14, (g) => {
+    g.translate(0, rise);
+    ell(g, 60, 54, 58, 6); paint(g, 'rgba(60,50,80,0.3)', null);
+    // chimney (behind the roof)
+    rr(g, 84, -74, 16, 40, 2); paint(g, '#9a4a3c', INK, 1.6);
+    snowCap(g, 82, 102, -74, 4, 4);
+    // log walls
+    rr(g, 8, -14, 104, 68, 2); paint(g, '#8a5634', INK, 2);
+    for (let y = -10; y < 54; y += 10) {
+      rr(g, 6, y, 108, 9, 4.5); paint(g, vgrad(g, y, y + 9, '#a8693e', '#7e4c2c'), 'rgba(43,42,72,0.6)', 1.1);
+      for (const x of [10, 110]) { circ(g, x, y + 4.5, 4); paint(g, '#d9b089', 'rgba(43,42,72,0.6)', 1); }
+    }
+    // window with warm light and a candle
+    glow(g, 32, 12, 32, 'rgba(255,200,110,0.55)');
+    rr(g, 18, 0, 28, 24, 2); paint(g, vgrad(g, 0, 24, '#ffe9a8', '#f6b860'), INK, 1.8);
+    g.strokeStyle = '#5c3820'; g.lineWidth = 2; g.beginPath(); g.moveTo(32, 0); g.lineTo(32, 24); g.moveTo(18, 12); g.lineTo(46, 12); g.stroke();
+    rr(g, 15, 23, 34, 5, 2); paint(g, C.snow, INK, 1.2);
+    // the open door, warm inside
+    glow(g, 84, 30, 40, 'rgba(255,190,100,0.5)');
+    rr(g, 70, 6, 30, 48, 2); paint(g, vgrad(g, 6, 54, '#ffd88a', '#f2a649'), INK, 1.8);
+    g.beginPath(); g.moveTo(70, 6); g.lineTo(62, 10); g.lineTo(62, 52); g.lineTo(70, 54); g.closePath(); paint(g, '#6e4228', INK, 1.5);
+    g.lineWidth = 3; g.strokeStyle = C.green; g.beginPath(); g.arc(66, 22, 3.5, 0, TAU); g.stroke();
+    // a sign over the door: a steaming mug
+    rr(g, 70, -12, 30, 15, 2); paint(g, '#d9b089', INK, 1.4);
+    rr(g, 78, -9, 11, 10, 2); paint(g, C.red, INK, 1.1);
+    g.strokeStyle = INK; g.lineWidth = 1.3; g.beginPath(); g.arc(90, -4, 3, -1.4, 1.4); g.stroke();
+    g.strokeStyle = 'rgba(255,255,255,0.9)'; g.beginPath(); g.moveTo(81, -10); g.quadraticCurveTo(79, -13, 82, -15); g.moveTo(86, -10); g.quadraticCurveTo(84, -13, 87, -15); g.stroke();
+    // skates hanging by the door
+    g.strokeStyle = INK; g.lineWidth = 1; g.beginPath(); g.moveTo(106, 4); g.lineTo(104, 14); g.moveTo(106, 4); g.lineTo(110, 16); g.stroke();
+    for (const [sx, sy] of [[100, 14], [106, 16]]) {
+      rr(g, sx, sy, 7, 10, 2); paint(g, '#f6f0e0', INK, 1);
+      g.strokeStyle = '#9aa5bf'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(sx - 1, sy + 12); g.lineTo(sx + 9, sy + 12); g.stroke();
+    }
+    // roof with thick snow and icicles
+    g.beginPath(); g.moveTo(-6, -10); g.lineTo(60, -58); g.lineTo(126, -10); g.closePath();
+    paint(g, vgrad(g, -58, -10, '#6b4a3a', '#4e3428'), INK, 2);
+    g.beginPath(); g.moveTo(-8, -8); g.lineTo(60, -62); g.lineTo(128, -8);
+    for (let x = 128; x >= -8; x -= 12) g.lineTo(x, -12 + (Math.round(x / 12) % 2 ? 4 : 0));
+    g.closePath(); paint(g, vgrad(g, -62, -8, '#ffffff', '#dbe4f4'), INK, 1.8);
+    g.fillStyle = '#cfe6f6'; g.strokeStyle = 'rgba(80,120,170,0.7)'; g.lineWidth = 0.8;
+    for (let x = 4; x < 120; x += 13) { g.beginPath(); g.moveTo(x - 2.5, -9); g.lineTo(x, -9 + 5 + (x % 3) * 3); g.lineTo(x + 2.5, -9); g.closePath(); g.fill(); g.stroke(); }
+    // a string of lights along the eave
+    for (let i = 0; i < 8; i++) { ell(g, 10 + i * 14, -4, 2.2, 3); paint(g, BULBS[i % 4], INK, 0.7); }
+  }, true);
+}
+
+// A campfire in a ring of stones (it boils, so the flames flicker).
+function campfire() {
+  const rise = 30;
+  return sprite('campfire', TILE, TILE + rise, 24, (g) => {
+    g.translate(0, rise);
+    glow(g, 30, 34, 40, 'rgba(255,170,80,0.55)');
+    ell(g, 30, 50, 24, 7); paint(g, 'rgba(60,40,30,0.3)', null);
+    g.save(); g.translate(30, 46); g.rotate(0.35); rr(g, -18, -3.5, 36, 7, 3); paint(g, '#7a4a2a', INK, 1.4); g.restore();
+    g.save(); g.translate(30, 46); g.rotate(-0.35); rr(g, -18, -3.5, 36, 7, 3); paint(g, '#8a5634', INK, 1.4); g.restore();
+    blob(g, [[16, 44], [18, 26], [24, 30], [28, 8], [34, 24], [40, 16], [44, 44], [30, 48]]);
+    paint(g, vgrad(g, 8, 48, '#ffd25a', '#f06a3a'), '#b8442a', 1.4);
+    blob(g, [[22, 44], [25, 32], [30, 22], [35, 32], [38, 44], [30, 46]]);
+    paint(g, '#fff1a8', null);
+    for (const [sx, sy] of [[24, 52], [36, 53], [14, 50], [46, 50], [30, 55]]) { ell(g, sx, sy, 6, 4); paint(g, '#9aa1b8', INK, 1.2); }
+  });
+}
+
+// The neighbor's porch: the front of their house, with a porch roof hung with lights and icicles,
+// a wreath on the door, a candle and a cat in the window, and a rocking chair.
+function neighborPorch() {
+  const rise = 118, w = 2 * TILE;
+  return sprite('neighborporch', w, TILE + rise, 16, (g) => {
+    g.translate(0, rise);
+    ell(g, 60, 55, 60, 5); paint(g, 'rgba(60,50,80,0.3)', null);
+    // the house's own snowy gable roof, above the porch, with a round attic window
+    rr(g, 86, -112, 14, 34, 2); paint(g, '#9a4a3c', INK, 1.6);
+    snowCap(g, 84, 102, -112, 4, 9);
+    g.beginPath(); g.moveTo(-4, -56); g.lineTo(60, -112); g.lineTo(124, -56); g.closePath();
+    paint(g, vgrad(g, -112, -56, '#9fb7c9', '#7f98ae'), INK, 2);
+    glow(g, 60, -78, 18, 'rgba(255,200,110,0.6)');
+    circ(g, 60, -78, 8); paint(g, '#ffe3a0', INK, 1.6);
+    g.beginPath(); g.moveTo(-12, -52); g.lineTo(60, -118); g.lineTo(132, -52); g.lineTo(122, -52); g.lineTo(60, -106); g.lineTo(-2, -52); g.closePath();
+    paint(g, C.snow, INK, 1.8);
+    // the wall, with siding
+    rr(g, 4, -40, 112, 86, 2); paint(g, vgrad(g, -40, 46, '#9fb7c9', '#7f98ae'), INK, 2);
+    g.strokeStyle = 'rgba(43,42,72,0.25)'; g.lineWidth = 1;
+    for (let y = -34; y < 44; y += 8) { g.beginPath(); g.moveTo(6, y); g.lineTo(114, y); g.stroke(); }
+    // window with a candle and a cat
+    glow(g, 26, -6, 30, 'rgba(255,200,110,0.55)');
+    rr(g, 10, -22, 32, 30, 2); paint(g, vgrad(g, -22, 8, '#ffe9a8', '#f6b860'), INK, 1.8);
+    g.fillStyle = '#3a3550';
+    ell(g, 34, 3, 6, 5); g.fill(); circ(g, 34, -4, 4); g.fill();
+    g.beginPath(); g.moveTo(31, -6); g.lineTo(31.5, -11); g.lineTo(33.5, -7); g.moveTo(37, -6); g.lineTo(36.5, -11); g.lineTo(34.5, -7); g.fill();
+    rr(g, 16, -4, 4, 10, 1); paint(g, '#f6f0e0', INK, 0.8);
+    ell(g, 18, -7, 1.8, 3); paint(g, '#ffb340', null);
+    g.strokeStyle = '#f6f0e0'; g.lineWidth = 2.2; g.beginPath(); g.moveTo(26, -22); g.lineTo(26, 8); g.moveTo(10, -7); g.lineTo(42, -7); g.stroke();
+    rr(g, 7, 7, 38, 5, 2); paint(g, C.snow, INK, 1.2);
+    // the door with a wreath, and the porch light
+    glow(g, 76, 6, 34, 'rgba(255,200,110,0.45)');
+    rr(g, 62, -18, 28, 64, 2); paint(g, vgrad(g, -18, 46, '#3f948e', '#2c6f6a'), INK, 1.8);
+    rr(g, 67, -12, 18, 16, 1.5); paint(g, 'rgba(255,233,168,0.9)', INK, 1);
+    circ(g, 85, 18, 1.8); paint(g, C.gold, null);
+    g.lineWidth = 5; g.strokeStyle = C.green; g.beginPath(); g.arc(76, 14, 7, 0, TAU); g.stroke();
+    g.fillStyle = C.red; for (let i = 0; i < 5; i++) { const a = (i / 5) * TAU; circ(g, 76 + Math.cos(a) * 7, 14 + Math.sin(a) * 7, 1.4); g.fill(); }
+    glow(g, 98, -10, 16, 'rgba(255,220,140,0.8)');
+    rr(g, 95, -16, 7, 10, 2); paint(g, '#fff1c2', INK, 1.2);
+    // rocking chair
+    g.strokeStyle = '#7a4a2a'; g.lineWidth = 3;
+    g.beginPath(); g.moveTo(98, 14); g.lineTo(100, 44); g.moveTo(112, 14); g.lineTo(112, 44); g.moveTo(96, 32); g.lineTo(116, 32); g.stroke();
+    g.lineWidth = 3.5; g.beginPath(); g.moveTo(92, 44); g.quadraticCurveTo(105, 50, 118, 44); g.stroke();
+    rr(g, 96, 28, 20, 5, 2); paint(g, C.red, INK, 1);
+    // porch floor and steps
+    rr(g, 0, 44, 120, 8, 1); paint(g, '#b9875a', INK, 1.6);
+    rr(g, 10, 51, 44, 5, 1); paint(g, '#a87650', INK, 1.4);
+    // posts with garland
+    for (const px of [2, 112]) { rr(g, px, -48, 6, 94, 1); paint(g, '#f3ece0', INK, 1.5); }
+    // porch roof, snow and icicles, lights along the edge
+    g.beginPath(); g.moveTo(-6, -46); g.lineTo(4, -64); g.lineTo(116, -64); g.lineTo(126, -46); g.closePath();
+    paint(g, vgrad(g, -64, -46, '#5d6a8c', '#454f70'), INK, 1.8);
+    snowCap(g, -6, 126, -62, 7, 12);
+    rr(g, -6, -48, 132, 6, 1); paint(g, '#f3ece0', INK, 1.5);
+    g.fillStyle = '#cfe6f6'; g.strokeStyle = 'rgba(80,120,170,0.7)'; g.lineWidth = 0.8;
+    for (let x = 2; x < 120; x += 11) { g.beginPath(); g.moveTo(x - 2, -42); g.lineTo(x, -42 + 4 + (x % 4) * 2); g.lineTo(x + 2, -42); g.closePath(); g.fill(); g.stroke(); }
+    g.strokeStyle = 'rgba(40,40,60,0.8)'; g.lineWidth = 1;
+    g.beginPath(); for (let i = 0; i <= 10; i++) g.lineTo(-2 + i * 12.4, -40 + (i % 2 ? 3 : 0)); g.stroke();
+    for (let i = 0; i <= 10; i++) { ell(g, -2 + i * 12.4, -38 + (i % 2 ? 3 : 0), 2.2, 3); paint(g, BULBS[i % 4], INK, 0.7); }
+    g.strokeStyle = C.green; g.lineWidth = 3.5;
+    for (const px of [5, 115]) { g.beginPath(); g.moveTo(px - 4, -40); for (let y = -40; y < 40; y += 12) g.quadraticCurveTo(px + 6, y + 6, px - 4, y + 12); g.stroke(); }
+  }, true);
+}
+
+// The ground at each stop.
+function drawStopGround(g, name, y, W, r) {
+  const T = TILE;
+  const snowy = () => {
+    g.fillStyle = vgrad(g, y, y + T, '#f6f9ff', '#e2e9f6'); g.fillRect(0, y, W, T);
+    g.fillStyle = 'rgba(255,255,255,0.8)';
+    for (let i = 0; i < 10; i++) { ell(g, r() * W, y + r() * T, 6 + r() * 10, 2 + r() * 2); g.fill(); }
+  };
+  const planks = (x0, x1, y0, y1, light, dark) => {
+    g.fillStyle = vgrad(g, y0, y1, light, dark); g.fillRect(x0, y0, x1 - x0, y1 - y0);
+    g.strokeStyle = 'rgba(70,40,25,0.45)'; g.lineWidth = 1.2;
+    for (let yy = y0 + 7; yy < y1; yy += 7) { g.beginPath(); g.moveTo(x0, yy); g.lineTo(x1, yy); g.stroke(); }
+    for (let yy = y0; yy < y1; yy += 7) for (let x = x0 + 20 + r() * 40; x < x1; x += 50 + r() * 40) { g.beginPath(); g.moveTo(x, yy); g.lineTo(x, yy + 7); g.stroke(); }
+  };
+  if (name === 'party') {
+    // the porch of the party house, and wide steps down into the snow
+    snowy();
+    planks(0, W, y + 40, y + T, '#c79a6a', '#a87650');
+    glow(g, W / 2, y + T + 10, 220, 'rgba(255,190,100,0.45)');
+    for (let i = 0; i < 3; i++) {
+      const t0 = y + 2 + i * 13, inset = 24 - i * 8;
+      g.fillStyle = vgrad(g, t0, t0 + 13, ['#cfd7e8', '#d8b48a', '#c9a074'][i], ['#b9a48e', '#c39a6e', '#b58a5e'][i]);
+      g.fillRect(inset, t0, W - 2 * inset, 13);
+      g.fillStyle = 'rgba(60,35,25,0.35)'; g.fillRect(inset, t0, W - 2 * inset, 2.5);             // shadow under the step above
+      g.fillStyle = 'rgba(255,255,255,0.85)';                                                   // snow on the nose
+      for (let x = inset; x < W - inset; x += 14) { ell(g, x + r() * 10, t0 + 11, 5 + r() * 6, 1.6); g.fill(); }
+    }
+    rr(g, W / 2 - 34, y + 44, 68, 13, 3); paint(g, '#a63a33', INK, 1.4);                   // the doormat
+    g.strokeStyle = C.gold; g.lineWidth = 1.2; g.strokeRect(W / 2 - 30, y + 47, 60, 7);
+  } else if (name === 'lamppost') {
+    // a shoveled street corner: paving, a curb, and the lamppost's pool of light
+    g.fillStyle = C.snow; g.fillRect(0, y, W, T);
+    g.fillStyle = vgrad(g, y, y + T, '#c3c8da', '#aab1c8'); g.fillRect(0, y + 8, W, T - 18);
+    g.strokeStyle = 'rgba(80,90,130,0.35)'; g.lineWidth = 1.5;
+    for (let x = T; x < W; x += T) { g.beginPath(); g.moveTo(x, y + 10); g.lineTo(x, y + T - 12); g.stroke(); }
+    rr(g, 0, y + T - 10, W, 8, 2); paint(g, '#d6d9e6', 'rgba(80,90,130,0.6)', 1.2);
+    glow(g, 6.5 * T, y + 26, 190, 'rgba(255,205,120,0.5)');
+    g.fillStyle = 'rgba(255,255,255,0.9)';
+    for (const x of [0, W - 40]) { ell(g, x + 20, y + 8, 34, 9); g.fill(); }
+  } else if (name === 'hut') {
+    // packed snow by the pond, and a plank walk from the hut past the fire
+    snowy();
+    glow(g, 1.5 * T, y + 20, 160, 'rgba(255,190,100,0.35)');
+    glow(g, 7.5 * T, y + 30, 120, 'rgba(255,160,80,0.4)');
+    planks(1.3 * T, W - 20, y + 20, y + 41, '#c79a6a', '#a87650');
+    g.strokeStyle = 'rgba(70,40,25,0.6)'; g.lineWidth = 1.4; g.strokeRect(1.3 * T, y + 20, W - 20 - 1.3 * T, 21);
+    g.fillStyle = 'rgba(120,130,170,0.35)';
+    for (let x = 30; x < W; x += 60 + r() * 30) { ell(g, x, y + 50, 8, 2); g.fill(); }
+    hatch(g, r, y, W, 3, 'rgba(140,160,205,0.45)');
+  } else {
+    // the neighbor's front path: stepping stones up to their porch
+    snowy();
+    glow(g, 7 * T, y + 20, 170, 'rgba(255,200,110,0.4)');
+    g.fillStyle = 'rgba(150,160,190,0.6)';
+    for (let i = 0; i < 5; i++) { ell(g, 3.6 * T + i * 30, y + 40 - i * 3, 11, 6); g.fill(); }
+    for (const x of [4.6 * T, 5.4 * T]) candyCane(g, x, y + 30);
+    hatch(g, r, y, W, 3, 'rgba(140,160,205,0.45)');
+  }
+}
+
 // ---- Woodland animals (drawn facing right; two frames for their legs) ----
 export function bunny(frame) {
   const w = 0.7 * TILE;
@@ -1290,22 +1604,7 @@ export function drawRow(g, def, y, W, above, below, seed) {
   const r = seeded(seed);
   const T = TILE;
   if (type === 'start' || type === 'checkpoint') {
-    // a cozy stop: warm light on the snow, a garland, and its name trodden into the snow
-    g.fillStyle = vgrad(g, y, y + T, '#fbf3e4', '#eadfcb'); g.fillRect(0, y, W, T);
-    glow(g, W / 2, y + T / 2, 200, 'rgba(255,200,120,0.25)');
-    hatch(g, r, y, W, 3, 'rgba(190,150,110,0.35)');
-    g.strokeStyle = C.green; g.lineWidth = 5;
-    g.beginPath(); g.moveTo(0, y + 5);
-    for (let x = 0; x <= W; x += 45) g.quadraticCurveTo(x + 22, y + 14, x + 45, y + 5);
-    g.stroke();
-    const bulbs = ['#ff6a5a', '#ffd25a', '#6ad08a', '#6ab4ff'];
-    for (let i = 0, x = 22; x < W; x += 45, i++) { ell(g, x, y + 11, 2.6, 3.4); paint(g, bulbs[i % 4], INK, 0.8); }
-    const name = type === 'start' ? 'The party' : def.name;
-    g.save();
-    g.font = '700 22px Gaegu, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillStyle = 'rgba(140,90,50,0.55)';
-    g.fillText(`★ ${name} ★`, W * 0.3, y + 38);
-    g.restore();
+    drawStopGround(g, def.scene, y, W, r);
   } else if (type === 'forest') {
     g.fillStyle = vgrad(g, y, y + T, '#e3e9f5', '#cdd7ec'); g.fillRect(0, y, W, T);
     g.fillStyle = 'rgba(70,110,90,0.35)';
@@ -1480,7 +1779,7 @@ export function warmTasks() {
   for (let v = 0; v < 4; v++) makers.push(() => car(v), () => van(v), () => sled(v), () => skater(v, 0), () => skater(v, 1));
   makers.push(plow, () => sleigh(0), () => sleigh(1));
   for (let v = 0; v < 4; v++) makers.push(() => ebike(v), () => carolers(v, 0), () => carolers(v, 1), () => dogwalker(v, 0), () => dogwalker(v, 1), () => fallingPresent(v));
-  makers.push(() => raccoon(0), () => raccoon(1), trashEyes);
+  makers.push(() => raccoon(0), () => raccoon(1), trashEyes, campfire);
   for (const f of [0, 1]) makers.push(() => bunny(f), () => fox(f), () => deer(f), () => moose(f));
   for (const k of ['glasses', 'fruitcake', 'present', 'eggnog']) makers.push(() => pickup(k));
   for (const size of [2, 3]) for (let v = 0; v < 3; v++) for (const thin of [false, true]) makers.push(() => floe(size, v, thin));
@@ -1488,6 +1787,7 @@ export function warmTasks() {
   const tasks = [];
   for (let v = 0; v < 3; v++) tasks.push(() => tree(v));
   tasks.push(lamppost, cottageSprite);
+  tasks.push(partyPillar, mailbox, cornerLamp, warmingHut, neighborPorch);
   for (const k of ['S', 'B', 'T']) for (let v = 0; v < 3; v++) tasks.push(() => yardDeco(k, v));
   tasks.push(trashCan, trashTipped);
   for (let f = 0; f < BOIL_FRAMES; f++) {

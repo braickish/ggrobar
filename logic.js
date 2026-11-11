@@ -24,6 +24,13 @@ export const SANTA_WARN = 1.4;                 // seconds of shadow and bells be
 // Points.
 export const ROW_PTS = 10;
 export const CHECKPOINT_PTS = 100;
+// The tiles each stop's scenery stands on (B), which block her like trees. art.js scene() draws them.
+export const SCENES = {
+  party: 'B.......B',      // the party house's porch pillars, either side of its front steps
+  lamppost: '.B....B..',   // a mailbox and the lamppost on the corner
+  hut: 'BB.....B.',        // the warming hut and its campfire
+  porch: '...B..BB.',      // a mailbox and the neighbor's front porch
+};
 export const HOME_PTS = 300;
 export const LIFE_PTS = 100;                   // per life left when she gets home
 export const PICKUP_PTS = 25;
@@ -57,10 +64,10 @@ export function rng(seed = 1) {
 // before every section after the first), then Grandma's yard. night 0 is the first Christmas Eve;
 // each night after that is faster and the sleigh comes more often.
 export function buildRoute(sections, night = 0) {
-  const rows = [{ type: 'start', section: 0 }];
+  const rows = [{ type: 'start', scene: 'party', section: 0 }];
   const info = [];
   sections.forEach((sec, i) => {
-    if (i > 0) rows.push({ type: 'checkpoint', name: sec.checkpoint, section: i });
+    if (i > 0) rows.push({ type: 'checkpoint', name: sec.checkpoint, scene: sec.scene, section: i });
     const startRow = rows.length - 1;          // the start row, or the checkpoint just added
     for (const def of sec.rows) {
       rows.push({ ...def, section: i, mul: (sec.speed ?? 1) * (1 + 0.15 * night) });
@@ -77,7 +84,10 @@ export function buildRoute(sections, night = 0) {
     });
   });
   rows.push({ type: 'yard', section: sections.length - 1 });
-  for (const r of rows) if (r.trees || r.deco) r.blocked = treeCols(r.trees ?? r.deco);
+  for (const r of rows) {
+    const layout = r.trees ?? r.deco ?? SCENES[r.scene];
+    if (layout) r.blocked = treeCols(layout);
+  }
   return { rows, sections: info, homeRow: rows.length - 1 };
 }
 

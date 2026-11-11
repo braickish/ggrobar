@@ -27,6 +27,7 @@
 //
 // Each section also sets:
 //   checkpoint  the name of the stop at its start (the first section starts at the party instead)
+//   scene       what the stop looks like: lamppost, hut or porch (drawn in art.js, laid out in logic.js SCENES)
 //   speed       a multiplier on everything that moves in it
 //   santaEvery  about how many seconds between sleigh swoops
 //   presentsEvery  (optional) about how many seconds between presents dropping out of the sky
@@ -45,7 +46,7 @@ export const SECTIONS = [
     // Blocks of two-row front yard / sidewalk / two-lane street / sidewalk, starting quiet and getting busier.
     // (Yard things in the two rows of a yard never share a column, so the tall ones don't overlap.)
     rows: [
-      { type: 'lawn', deco: 'S......T.' },
+      { type: 'lawn', deco: '.S.....T.' },
       { type: 'lawn', deco: '..C......' },
       { type: 'sidewalk', dir: 1, speed: 1.0, kind: 'dogwalker', count: 2, stops: [2.4, 1.0] },
       { type: 'road', dir: -1, speed: 2.0, kind: 'ebike', count: 2 },
@@ -73,6 +74,7 @@ export const SECTIONS = [
   {
     name: 'The Sledding Hill',
     checkpoint: 'The lamppost on the corner',
+    scene: 'lamppost',
     speed: 1.05,
     santaEvery: 7,
     // The hill slopes down to the right, so every sled goes that way.
@@ -97,6 +99,7 @@ export const SECTIONS = [
   {
     name: 'The Frozen Pond',
     checkpoint: 'The warming hut',
+    scene: 'hut',
     speed: 1.1,
     santaEvery: 6.5,
     rows: [
@@ -120,6 +123,7 @@ export const SECTIONS = [
   {
     name: 'The Woods',
     checkpoint: "The neighbor's porch",
+    scene: 'porch',
     speed: 1.15,
     santaEvery: 5.5,
     rows: [

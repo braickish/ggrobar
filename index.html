@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&family=Mountains+of+Christmas:wght@700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=202611102325">
+  <link rel="stylesheet" href="style.css?v=202611110448">
 </head>
 <body>
   <header class="hud">
@@ -32,13 +32,6 @@
       <div class="cold-bar"><div id="cold-fill" class="cold-fill"></div></div>
     </div>
     <span id="nog" class="nog hidden">🥛 ×2</span>
-  </div>
-
-  <div class="progress-wrap" aria-hidden="true">
-    <div id="progress" class="progress">
-      <span id="prog-gran" class="prog-gran">👵</span>
-      <span class="prog-home">🏠</span>
-    </div>
   </div>
 
   <main id="stage">
@@ -90,7 +83,7 @@
   </div>
 
   <!-- Every file carries the same version, so a browser can't mix files from two releases. npm run bump changes it. -->
-  <script type="module" src="game.js?v=202611102325"></script>
+  <script type="module" src="game.js?v=202611110448"></script>
   <script>
     // If the game hasn't started a few seconds after the page loads, say so instead of leaving a blank board.
     window.addEventListener('load', () => setTimeout(() => {

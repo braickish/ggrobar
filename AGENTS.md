@@ -12,7 +12,12 @@ and a regularly swooping sleigh. Built for a parent and their kids; keep it appr
   drawing), `sound.js` (Web Audio synth, no files; iPhone unlock copied from Witch's Brew), `game.js` (loop, input, rendering).
 - One long walk, not rounds: `buildRoute` stitches the sections into ~68 rows: a `start` row, each section's rows,
   a `checkpoint` row before every section after the first, and Grandma's `yard` (the only house) at the end.
-  Checkpoints refill the cold meter (per-section `coldTime`) and are where she respawns. Reaching the yard is the
+  Checkpoints refill the cold meter (per-section `coldTime`) and are where she respawns. Each stop is drawn as a real place, no
+  writing on the ground (the user asked for artwork instead of names): the party house's porch steps and pillars
+  (`start`), a mailbox and a tall two-lantern lamppost, the warming hut (log cabin with live chimney smoke) and a
+  campfire, and the neighbor's house with its porch. A row's `scene` names it; `SCENES` in logic.js marks which tiles
+  the scenery blocks (like trees), and `Art.scene()` / `drawStopGround()` draw it. Tall parts turn see-through while
+  Grandma is behind them. There's no progress bar any more (the user removed it to keep the screen simpler). Reaching the yard is the
   win; "Next Christmas Eve" rebuilds the route with `night + 1` (faster, more sleigh) keeping score and lives.
 - View size: 910 units tall (`H_WIDE`) on wide screens. On a phone held upright (`#stage.fill`) the board fills the
   width edge to edge and `H` is whatever fits the height (`H_MIN`..`H_MAX`), drawn at ≤2× pixel density (2.5× halved
@@ -67,7 +72,7 @@ and a regularly swooping sleigh. Built for a parent and their kids; keep it appr
   with her feet 10 units above the lane's bottom so she sits in the lane like the vehicles.
 - Eggnog stacks: `nog` counts glasses, points ×(nog + 1), kept through checkpoints until she loses a life (reset each
   night). `tipsy` seconds (`nogTime`, longer per glass) make most forward/back steps veer a column left or right, like she's tipsy (`nogDrift`, 50%+ and higher per glass;
-  the user wanted it obvious). The HUD header/status/progress are capped at the board's width via `--board-w` (set in
+  the user wanted it obvious). The HUD header and status row are capped at the board's width via `--board-w` (set in
   `resize()`), with type sized in container units so it fits.
 - Fonts: Mountains of Christmas (titles) and Gaegu (handwritten UI and in-game text) from Google Fonts.
 - `?debug` exposes `window.ggrobar` (see README). Screenshots/play tests were done with Playwright from

@@ -25,7 +25,7 @@ in it that comes through every few seconds.
 - On the pond, stand on the ice floes. The water, and floes that drift off the edge, are a sploosh.
   Floes with cracks in them sink for a moment every few seconds.
 - The **cold meter** runs down while you walk. If it runs out, Grandma turns into a snowman.
-- **Checkpoints** between sections warm her back up, and she starts there again if she loses a life.
+- **Stops** between sections (the lamppost on the corner, the warming hut, the neighbor's porch) warm her back up, and she starts there again if she loses a life.
 - Three lives. Lose them all and it's back to the party.
 - Get her home to win. Then try **Next Christmas Eve**: everything's faster and the sleigh comes more often,
   and your score and lives carry on.

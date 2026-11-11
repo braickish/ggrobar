@@ -1,7 +1,7 @@
-import { SECTIONS } from './stages.js?v=202611102325';
-import * as L from './logic.js?v=202611102325';
-import * as Art from './art.js?v=202611102325';
-import { Sound } from './sound.js?v=202611102325';
+import { SECTIONS } from './stages.js?v=202611110448';
+import * as L from './logic.js?v=202611110448';
+import * as Art from './art.js?v=202611110448';
+import { Sound } from './sound.js?v=202611110448';
 
 const T = Art.TILE;
 const W = L.COLS * T;                           // 540
@@ -107,7 +107,6 @@ function startNight() {
   banner = { text: night ? `Christmas Eve #${night + 1}` : 'Christmas Eve', sub: route.sections[0].name, t: 0 };
   setState('playing');
   updateHud();
-  buildProgress();
 }
 
 // Back to the last checkpoint (or the party) after losing a life.
@@ -420,7 +419,6 @@ function update(dt) {
     if (state === 'playing' && cold <= 0) loseLife('freeze');
     if (gran.spinT > 0) gran.spinT = Math.max(0, gran.spinT - dt);
     updateColdBar();
-    updateProgress();
   }
   // The camera glides forward to keep up with her, and never goes back on its own.
   const target = camFor(gran.row);
@@ -789,7 +787,7 @@ function draw() {
   const gRow = state === 'dying' || state === 'won' || ((state === 'over') && death) ? -1 : currentRow();
   for (let row = hi; row >= lo; row--) {
     const def = route.rows[row];
-    if (def.blocked) {
+    if (def.blocked && !def.scene) {
       for (const col of def.blocked) {
         const ch = def.deco?.[col];
         if (ch === 'C') { drawCan(row, col); continue; }
@@ -797,10 +795,7 @@ function draw() {
         Art.blit(ctx, pic, col * T, rowTop(row) - Art.RISE);
       }
     }
-    if (def.type === 'checkpoint' || def.type === 'start') {
-      Art.blit(ctx, Art.lamppost(), 0, rowTop(row) - Art.RISE);
-      Art.blit(ctx, Art.lamppost(), W - 24, rowTop(row) - Art.RISE);
-    }
+    if (def.scene) drawScene(row, def.scene);
     drawLane(lanes[row]);
     drawRaccoon(row);
     if (row === gRow) drawGrandma(shake);
@@ -908,6 +903,19 @@ function drawLane(lane) {
 }
 
 // A trash can: upright, rattling with eyes peeking out, or knocked over.
+// A stop's scenery (the party porch, the corner lamppost, the warming hut, the neighbor's porch). Tall
+// parts reach up over the rows behind them, so they turn see-through while Grandma is back there.
+function drawScene(row, name) {
+  Art.sceneLive(ctx, name, 0, rowTop(row), time);
+  const gr = gran.row, gx = gran.x;
+  for (const p of Art.scene(name)) {
+    const behind = gr > row && gr <= row + Math.ceil(p.rise / T) && gx > p.col && gx < p.col + p.pic.lw / T;
+    if (behind) ctx.globalAlpha = 0.45;
+    Art.blit(ctx, p.pic, p.col * T, rowTop(row) - p.rise, p.flip);
+    ctx.globalAlpha = 1;
+  }
+}
+
 function drawCan(row, col) {
   const x = col * T, y = rowTop(row) - Art.RISE;
   if (tipped.has(row * 100 + col)) { Art.blit(ctx, Art.trashTipped(), x, y); return; }
@@ -1102,26 +1110,6 @@ function updateColdBar() {
   if (nogEl.textContent !== label) nogEl.textContent = label;
 }
 
-// The progress bar: a dot for each checkpoint, the house at the end, and Grandma moving along.
-const progEl = $('progress');
-const progGran = $('prog-gran');
-function buildProgress() {
-  progEl.querySelectorAll('.cp').forEach((n) => n.remove());
-  route.sections.forEach((s, i) => {
-    if (!i) return;
-    const dot = document.createElement('span');
-    dot.className = 'cp';
-    dot.style.left = `${(100 * s.startRow) / route.homeRow}%`;
-    dot.title = s.checkpoint;
-    progEl.appendChild(dot);
-  });
-  updateProgress();
-}
-function updateProgress() {
-  progGran.style.left = `${(100 * gran.row) / route.homeRow}%`;
-  progEl.querySelectorAll('.cp').forEach((n, i) => n.classList.toggle('done', i + 1 <= reached));
-}
-
 // ---- Input ----
 const KEYS = {
   ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
@@ -1209,7 +1197,6 @@ new ResizeObserver(resize).observe(stageEl);
 resize();
 makeSnow(90);
 updateHud();
-buildProgress();
 requestAnimationFrame(frame);
 // The row pictures include handwritten names, so redraw them once the font has arrived.
 if (document.fonts) document.fonts.ready.then(() => { headUrl = null; livesEl.replaceChildren(); resetRing(); updateHud(); });
