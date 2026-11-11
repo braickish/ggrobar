@@ -1,7 +1,7 @@
-import { SECTIONS } from './stages.js?v=202611110452';
-import * as L from './logic.js?v=202611110452';
-import * as Art from './art.js?v=202611110452';
-import { Sound } from './sound.js?v=202611110452';
+import { SECTIONS } from './stages.js?v=202611111613';
+import * as L from './logic.js?v=202611111613';
+import * as Art from './art.js?v=202611111613';
+import { Sound } from './sound.js?v=202611111613';
 
 const T = Art.TILE;
 const W = L.COLS * T;                           // 540
@@ -54,7 +54,6 @@ let cold = 40;
 let nog = 0;                  // glasses of eggnog since she last lost a life: points ×(nog + 1)
 let tipsy = 0;                // seconds of wobbling left
 let drops = [];               // presents falling out of the sky
-let dropNext = 3;
 let coon = null;              // a raccoon: { row, col, phase: 'rattle' | 'run', t, x, dir }
 let coonNext = 4;
 let tipped = new Set();       // trash cans knocked over (row * 100 + col)
@@ -118,7 +117,6 @@ function respawn() {
   nog = 0;
   tipsy = 0;
   drops = [];
-  dropNext = 4;
   coon = null;
   coonNext = 3;
   maxRow = Math.max(maxRow, row);
@@ -355,7 +353,37 @@ function updateSanta(dt) {
       const lo = Math.ceil(cam) + 1, hi = Math.min(route.homeRow - 1, Math.floor(cam + H / T) - 2);
       const row = L.pickSantaRow(gran.row, lo, hi, santaCanUse);
       if (row === null) { santa.next = 1; return; }
-      Object.assign(santa, { phase: 'warn', t: 0, row, dir: Math.random() < 0.5 ? 1 : -1 });
+      const dir = Math.random() < 0.5 ? 1 : -1;
+      const sec = route.sections[L.sectionOf(route, gran.row)];
+      if (sec.presents) {
+        // first he flies over the other way, too high up to see (you only hear the bells), and drops a
+        // present near her; then he turns round
+        const spot = L.pickDropSpot(route, L.sectionOf(route, gran.row), gran.row, Math.floor(gran.x), drops);
+        Object.assign(santa, { phase: 'fly', t: 0, row, dir: -dir, drop: spot });
+      } else {
+        Object.assign(santa, { phase: 'warn', t: 0, row, dir });
+      }
+      Sound.sleighBells();
+    }
+  } else if (santa.phase === 'fly') {
+    santa.t += dt;
+    const d = santa.drop;
+    if (d && (santa.dir > 0 ? L.flySackX(1, santa.t) >= d.col + 0.5 : L.flySackX(-1, santa.t) <= d.col + 0.5)) {
+      santa.drop = null;
+      if (!L.isBlocked(route, d.row, d.col) && !drops.some((q) => q.row === d.row && q.col === d.col)) {
+        drops.push({ ...d, t: 0, variant: Math.floor(Math.random() * 4), landed: false, dir: santa.dir });
+        Sound.fall();
+      }
+    }
+    if (L.flyDone(santa.dir, santa.t)) { santa.phase = 'turn'; santa.t = 0; }
+  } else if (santa.phase === 'turn') {
+    // out of sight, turning round; then he comes back low along a row near her
+    santa.t += dt;
+    if (santa.t >= 0.5) {
+      const lo = Math.ceil(cam) + 1, hi = Math.min(route.homeRow - 1, Math.floor(cam + H / T) - 2);
+      const row = L.pickSantaRow(gran.row, lo, hi, santaCanUse);
+      if (row === null) { santa.phase = 'idle'; santa.next = 2; return; }
+      Object.assign(santa, { phase: 'warn', t: 0, row, dir: -santa.dir });
       Sound.sleighBells();
     }
   } else if (santa.phase === 'warn') {
@@ -485,18 +513,8 @@ function bounceOff(lane) {
   floater(currentX() * T, rowTop(gran.fromRow) - 4, animal ? 'Boop!' : 'Bonk!', '#ffffff', 22);
 }
 
-// ---- Presents falling out of the sky (sections with presentsEvery) ----
+// ---- Presents Santa drops as he flies over (sections with presents; see updateSanta) ----
 function updateDrops(dt) {
-  const secIdx = L.sectionOf(route, gran.row);
-  const sec = route.sections[secIdx];
-  if (sec.presentsEvery) {
-    dropNext -= dt;
-    if (dropNext <= 0) {
-      dropNext = sec.presentsEvery * rand(0.7, 1.3);
-      const spot = L.pickDropSpot(route, secIdx, gran.row, Math.floor(gran.x), drops);
-      if (spot) { drops.push({ ...spot, t: 0, variant: Math.floor(Math.random() * 4), landed: false }); Sound.fall(); }
-    }
-  }
   for (const d of drops) {
     d.t += dt;
     if (d.landed && !d.gone) {
@@ -543,17 +561,18 @@ function drawDropShadows() {
 function drawDrops(landed) {
   for (const d of drops) {
     if (d.landed !== landed) continue;
+    // it drops in from high above (Santa's out of sight), carried on a little the way he was going
     const fall = 0.4;                                        // it comes into view for the last bit
-    const left = L.DROP_WARN - d.t;
+    const left = L.DROP_WARN - d.t, k = Math.max(0, left / fall);
     let y = rowTop(d.row) - 4, sq = 1;
     if (left > fall) continue;
-    if (left > 0) y -= (left / fall) ** 2 * 520;
+    if (left > 0) y -= k ** 2 * 520;
     else { const b = d.t - L.DROP_WARN; sq = 1 - 0.25 * Math.exp(-b * 9) * Math.cos(b * 30); }
-    const cx = d.col * T + T / 2;
+    const cx = d.col * T + T / 2 - (d.dir ?? 0) * k * T * 0.8;
     ctx.save();
     ctx.translate(cx, y + T); ctx.scale(1 / sq, sq); ctx.translate(-cx, -(y + T));
     if (left > 0) { ctx.translate(cx, y + T / 2); ctx.rotate(left * 4); ctx.translate(-cx, -(y + T / 2)); }
-    Art.blit(ctx, Art.fallingPresent(d.variant), d.col * T, y);
+    Art.blit(ctx, Art.fallingPresent(d.variant), cx - T / 2, y);
     ctx.restore();
   }
 }
@@ -983,7 +1002,7 @@ function drawDeath() {
 // spreading into the row (it's the lead reindeer's nose, just out of sight). During the swoop, the nose
 // lights up the row ahead of the sleigh.
 function drawSantaWarning() {
-  if (santa.phase === 'idle') return;
+  if (santa.phase !== 'warn' && santa.phase !== 'swoop') return;
   const top = rowTop(santa.row), mid = top + T / 2;
   const dir = santa.dir;
   ctx.save();
@@ -1213,6 +1232,7 @@ if (DEBUG) {
     warp(row, x = 4.5) { Object.assign(gran, { row, fromRow: row, x, fromX: x, prevRow: row, prevX: x, hop: 1 }); cam = camFor(row); maxRow = Math.max(maxRow, row); },
     santa(row, dir = 1) { santa = { phase: 'warn', t: 0, row, dir, next: 0 }; Sound.sleighBells(); },
     santaSwoop(t = 0.4) { santa.phase = 'swoop'; santa.t = t; },
+    santaFly() { santa.phase = 'idle'; santa.next = 0; },
     invincible(on = true) { invincible = on; },
     nog(n = 1) { nog += n; tipsy += L.nogTime(nog); },
     raccoon(row, col, dir = 1) { coon = { row, col, phase: 'rattle', t: 0, dir }; },

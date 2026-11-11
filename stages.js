@@ -30,18 +30,19 @@
 //   scene       what the stop looks like: lamppost, hut or porch (drawn in art.js, laid out in logic.js SCENES)
 //   speed       a multiplier on everything that moves in it
 //   santaEvery  about how many seconds between sleigh swoops
-//   presentsEvery  (optional) about how many seconds between presents dropping out of the sky
+//   presents    (optional) true: each time, Santa first flies over out of sight and drops a present, then
+//               turns round and swoops back low along a row
 //   raccoonsEvery  (optional) about how many seconds between raccoons bursting out of trash cans
 
 export const SECTIONS = [
   {
-    // Grandma's neighbors' front yards, sidewalks and quiet streets full of kids on e-bikes. Presents keep
-    // falling out of the sky here (watch for their shadows; grab the ones that land), and at the top she
+    // Grandma's neighbors' front yards, sidewalks and quiet streets full of kids on e-bikes. Santa drops a
+    // present here each time he flies over (watch for its shadow; grab it once it lands), and at the top she
     // crosses Main Street to the park.
     name: 'Holly Lane',
     speed: 1,
     santaEvery: 9,
-    presentsEvery: 3.2,
+    presents: true,
     raccoonsEvery: 6,
     // Blocks of two-row front yard / sidewalk / two-lane street / sidewalk, starting quiet and getting busier.
     // (Yard things in the two rows of a yard never share a column, so the tall ones don't overlap.)

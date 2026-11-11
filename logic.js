@@ -26,8 +26,8 @@ export const ROW_PTS = 10;
 export const CHECKPOINT_PTS = 100;
 // The tiles each stop's scenery stands on (B), which block her like trees. art.js scene() draws them.
 export const SCENES = {
-  party: 'B.......B',      // the party house's porch pillars, either side of its front steps
-  lamppost: '.B....B..',   // a mailbox and the lamppost on the corner
+  party: '.........',      // the party house's front steps (nothing in the way)
+  lamppost: '.B....B..',   // a mailbox, and the lamppost where the sidewalk turns the corner
   hut: 'BB.....B.',        // the warming hut and its campfire
   porch: '...B..BB.',      // a mailbox and the neighbor's front porch
 };
@@ -44,7 +44,9 @@ export const NOG_TIME_EACH = 6;                // ...and this much more for ever
 export const nogTime = (glasses) => NOG_TIME + NOG_TIME_EACH * (glasses - 1);
 export const nogDrift = (glasses) => Math.min(0.85, 0.5 + 0.12 * glasses);    // chance a step forward or back veers left or right
 
-// Presents falling out of the sky (the neighborhood): a shadow grows for DROP_WARN seconds, then it lands.
+// Presents falling out of the sky (the neighborhood): Santa flies over out of sight and drops one, then turns
+// round and swoops back low along a row. From the moment it leaves the sleigh, a shadow grows for
+// DROP_WARN seconds, then it lands.
 export const DROP_WARN = 1.3;
 export const DROP_STAY = 5;                    // a landed present stays this long, then pops...
 export const DROP_PTS = 50;                    // ...for Grandma to grab, unless something runs it over first
@@ -80,7 +82,7 @@ export function buildRoute(sections, night = 0) {
       coldTime: Math.round(sec.rows.length * 2.6 + 10),
       santaEvery: Math.max(3.5, sec.santaEvery * (1 - 0.1 * night)),
       raccoonsEvery: sec.raccoonsEvery ?? 0,
-      presentsEvery: sec.presentsEvery ? Math.max(1.6, sec.presentsEvery * (1 - 0.1 * night)) : 0,
+      presents: !!sec.presents,
     });
   });
   rows.push({ type: 'yard', section: sections.length - 1 });
@@ -230,6 +232,22 @@ export function pickSantaRow(grandmaRow, lo, hi, canUse = () => true, rand = Mat
 // Where the sleigh's front is at time t after the warning ends (dir 1 enters from the left).
 export function sleighX(dir, t) {
   return dir > 0 ? -SLEIGH_W - 1 + SLEIGH_SPEED * t : COLS + 1 - SLEIGH_SPEED * t;
+}
+
+// The high flyover before a swoop (sections with presents): never drawn (he's too high to see), it just
+// times when and where the present drops, as if he'd passed over.
+export const FLY_SPEED = 9;                    // tiles per second
+export const FLY_W = SLEIGH_W * 0.6;
+export function flyX(dir, t) {
+  return dir > 0 ? -FLY_W - 1 + FLY_SPEED * t : COLS + 1 - FLY_SPEED * t;
+}
+export function flyDone(dir, t) {
+  const x = flyX(dir, t);
+  return dir > 0 ? x > COLS + 1 : x + FLY_W < -1;
+}
+// Where the sleigh itself (behind the reindeer) is during the flyover: the present drops from there.
+export function flySackX(dir, t) {
+  return flyX(dir, t) + FLY_W * (dir > 0 ? 0.15 : 0.85);
 }
 
 export function sleighDone(dir, t) {

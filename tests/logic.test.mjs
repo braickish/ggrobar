@@ -208,7 +208,7 @@ test('the first section is a neighborhood: yards, sidewalks, two-lane streets, b
     if (r.type === 'road' && town.rows[i - 1]?.type !== 'road') assert.equal(town.rows[i + 1]?.type, 'road', `row ${i}: one-lane street`);
   });
   assert.ok(town.rows.filter((r) => r.type === 'sidewalk').length >= 6);
-  assert.ok(town.presentsEvery > 0 && town.raccoonsEvery > 0);
+  assert.ok(town.presents && town.raccoonsEvery > 0);
   const busy = (rows) => rows.reduce((n, r) => n + (r.count ?? 0), 0);
   assert.ok(busy(town.rows.slice(0, 6)) < busy(town.rows.slice(11, 17)));
   // yards are two rows deep, and the two rows never have things in the same column (tall ones would overlap)
@@ -268,5 +268,18 @@ test('presents only drop near Grandma, in her section, on open ground', () => {
     assert.ok(!L.isBlocked(route, spot.row, spot.col));
     assert.ok(Math.abs(spot.row - gRow) <= 2 && Math.abs(spot.col - gCol) <= 2);
   }
-  assert.equal(route.sections[1].presentsEvery, 0, 'only the neighborhood has falling presents');
+  assert.equal(route.sections[1].presents, false, 'only the neighborhood has falling presents');
+});
+
+test("Santa's high flyover crosses every column (so he can drop a present anywhere) and then finishes", () => {
+  for (const dir of [1, -1]) {
+    const seen = new Set();
+    let t = 0;
+    for (; !L.flyDone(dir, t) && t < 10; t += 0.01) {
+      const x = L.flySackX(dir, t);
+      if (x >= 0 && x < L.COLS) seen.add(Math.floor(x));
+    }
+    assert.equal(seen.size, L.COLS);
+    assert.ok(t < 3, 'the flyover is quick');
+  }
 });

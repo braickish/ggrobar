@@ -13,8 +13,9 @@ and a regularly swooping sleigh. Built for a parent and their kids; keep it appr
 - One long walk, not rounds: `buildRoute` stitches the sections into ~68 rows: a `start` row, each section's rows,
   a `checkpoint` row before every section after the first, and Grandma's `yard` (the only house) at the end.
   Checkpoints refill the cold meter (per-section `coldTime`) and are where she respawns. Each stop is drawn as a real place, no
-  writing on the ground (the user asked for artwork instead of names): the party house's porch steps and pillars
-  (`start`), a mailbox and a tall two-lantern lamppost, the warming hut (log cabin with live chimney smoke) and a
+  writing on the ground (the user asked for artwork instead of names): the party house's porch and steps, about three
+  tiles wide with no pillars (`start`; the user asked for narrower steps), a mailbox and a tall two-lantern lamppost
+  on a real street corner (the sidewalk's curb rounds the corner into a side street with a crosswalk), the warming hut (log cabin with live chimney smoke) and a
   campfire, and the neighbor's house with its porch. A row's `scene` names it; `SCENES` in logic.js marks which tiles
   the scenery blocks (like trees), and `Art.scene()` / `drawStopGround()` draw it. Tall parts turn see-through while
   Grandma is behind them. There's no progress bar any more (the user removed it to keep the screen simpler). Reaching the yard is the
@@ -30,7 +31,10 @@ and a regularly swooping sleigh. Built for a parent and their kids; keep it appr
   (stops to sniff); e-bikes ride the `road` rows. The user wanted it to feel like a real neighborhood: blocks of yard /
   two-row yard (things in its two rows never share a column, tested) / sidewalk / two-lane street (a `road` row with
   no `kind` is an empty lane) / sidewalk (never two sidewalks in a row, tested), quiet at first, then Main Street at the top.
-  Sections with `presentsEvery` drop presents near her (`pickDropSpot`): a growing shadow (no red ring; the user removed it) for `DROP_WARN` s, then it
+  Sections with `presents: true` get one present per Santa visit, never on their own (the user wanted fewer, tied to
+  Santa): Santa's cycle becomes `fly` (an invisible high pass the other way, timed by `flyX`/`flySackX`; only the bells
+  are heard, he's never drawn) → the present (`pickDropSpot`, near her) drops in from above the screen when he'd pass over its column
+  → `turn` (0.5 s) → the usual low `warn`/`swoop` coming back the other way. Each present: a growing shadow (no red ring; the user removed it) for `DROP_WARN` s, then it
   lands and squashes her if she's on that tile. A landed present is worth `DROP_PTS` if she steps on it, vanishes if a
   mover drives over its tile (`presentRunOver`), and pops after `DROP_STAY` s (same sparkle as being run over; the user didn't want blinking).
   Lawn `C` is a trash can (the user found the lit bushes `B` too busy, so they're unused but still drawable). Sections
@@ -41,7 +45,7 @@ and a regularly swooping sleigh. Built for a parent and their kids; keep it appr
   animals. Animal personalities are lane-wide stop/go cycles (`stops`, `KIND_ACCEL`) so spacing stays even.
   `routeIsWalkable` (BFS) and the gap tests in `tests/logic.test.mjs` guard against impossible layouts.
 - Movers loop over a 15-tile track (3 hidden tiles each side) with even spacing, so gaps never change.
-- Santa: idle → warn (bells, plus a red glow washing in from the row's edge with the lead reindeer's red nose
+- Santa: idle → (fly → turn, in present sections) → warn (bells, plus a red glow washing in from the row's edge with the lead reindeer's red nose
   peeking in, `SANTA_WARN` s) → swoop (the nose lights the row ahead). The lead reindeer has a red nose but is
   deliberately not named (the well-known red-nosed reindeer is a trademarked character). Row picking favours
   rows near Grandma (`pickSantaRow`), limited to rows on screen. Interval comes from each section's `santaEvery`.
